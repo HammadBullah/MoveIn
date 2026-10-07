@@ -1,12 +1,17 @@
 name: Fetch real UK bus data from BODS
 
-# Runs on a GitHub runner because a runner is the machine with a route to the
-# internet -- the sandbox MoveIn is developed in cannot reach BODS at all, and
-# no API key changes that.  Triggered by a change to `ops/fetch-bods`, a sentinel
-# file, so ordinary commits do not start fetches and the artifact this job
-# commits cannot trigger itself.
+# This runs on a GitHub runner because *this is the machine with a route to the
+# internet*.  The sandbox MoveIn is developed in cannot reach the DfT Bus Open
+# Data Service at all: the TLS handshake is dropped before a request is sent, and
+# no API key changes that.  A runner has ordinary internet access, so the
+# national download happens here and the compiled result is committed back.
 #
-# The work itself lives in ops/fetch-bods.sh.
+# Triggered by pushing a change to `ops/fetch-bods` (a sentinel: the paths filter
+# keeps normal commits from starting fetches, and the artifact this job commits
+# is not in the filter, so the job cannot trigger itself).
+#
+# Everything it learns is written to `ops/last-run.txt` and committed, because
+# this environment cannot read Actions logs -- only the repository.
 
 on:
   push:
@@ -20,7 +25,11 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    env:
+      MOVEIN_BODS_API_KEY: ${{ secrets.BODS_API_KEY }}
+      MOVEIN_BODS_ALLOW_ANONYMOUS: '1'
+      REPORT: ops/last-run.txt
     steps:
       - uses: actions/checkout@v4
 
@@ -28,19 +37,75 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Fetch and compile
-        env:
-          MOVEIN_BODS_API_KEY: ${{ secrets.BODS_API_KEY }}
-          MOVEIN_BODS_ALLOW_ANONYMOUS: '1'
-        run: bash ops/fetch-bods.sh 60 2>&1 | tee ops/last-run.txt
+      - name: Install what the fetcher needs
+        run: |
+          {
+            pip install --quiet httpx
+            python -c 'import httpx; print("httpx", httpx.__version__)'
+          } 2>&1 | tee -a "$REPORT"
 
-      - name: Commit the report and whatever was compiled
+      - name: Probe — can a runner reach BODS, and does it need a key?
+        run: |
+          {
+            echo "=== probe $(date -u +%FT%TZ) ==="
+            echo "key present: $([ -n "$MOVEIN_BODS_API_KEY" ] && echo yes || echo no)"
+            echo "--- dns ---"
+            getent hosts data.bus-data.dft.gov.uk || echo "no dns"
+            echo "--- catalogue, no key ---"
+            curl -sS -o /tmp/list.json -w 'HTTP %{http_code}, %{size_download} bytes\n' \
+              'https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1' || echo "curl exit $?"
+            head -c 400 /tmp/list.json 2>/dev/null; echo
+            echo "--- catalogue, key as query param ---"
+            curl -sS -o /tmp/list2.json -w 'HTTP %{http_code}, %{size_download} bytes\n' \
+              "https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1&api_key=$MOVEIN_BODS_API_KEY" || echo "curl exit $?"
+            head -c 200 /tmp/list2.json 2>/dev/null; echo
+            echo "--- one dataset download, no key ---"
+            curl -sSL -o /tmp/one.zip -w 'HTTP %{http_code}, %{size_download} bytes\n' \
+              'https://data.bus-data.dft.gov.uk/timetable/dataset/465/download/' || echo "curl exit $?"
+            ls -l /tmp/one.zip 2>/dev/null || true
+          } 2>&1 | tee -a "$REPORT"
+
+      - name: Fetch datasets
+        id: fetch
+        continue-on-error: true
+        run: |
+          {
+            echo "=== fetch $(date -u +%FT%TZ) ==="
+            python scripts/fetch_bods_gtfs.py \
+              --out backend/data/raw/bods \
+              --limit 60 \
+              --area Nottingham --area Leicester --area Derby --area Coventry \
+              --area Birmingham --area Sheffield --area Leeds --area Manchester \
+              --area Milton Keynes --area Peterborough --area Slough --area Reading
+            echo "fetch exit: $?"
+            echo "datasets unpacked: $(find backend/data/raw/bods -name manifest.json | wc -l)"
+            echo "gtfs files: $(find backend/data/raw/bods -name '*.txt' | wc -l)"
+          } 2>&1 | tee -a "$REPORT"
+
+      - name: Compile the real routes
+        id: compile
+        continue-on-error: true
+        run: |
+          {
+            echo "=== compile $(date -u +%FT%TZ) ==="
+            python scripts/import_gtfs_routes.py \
+              --source backend/data/raw/bods \
+              --out backend/data/raw/real_bus_routes/compiled_bods.json.gz
+            echo "compile exit: $?"
+            ls -l backend/data/raw/real_bus_routes/compiled_bods.json.gz 2>/dev/null || echo "no compiled file"
+          } 2>&1 | tee -a "$REPORT"
+
+      - name: Commit the result and the report
         if: always()
         run: |
+          {
+          echo "=== commit $(date -u +%FT%TZ) ==="
           git config user.name 'movein-bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f ops/last-run.txt
-          git add backend/data/raw/real_bus_routes/compiled_bods.json.gz || true
+          git add "$REPORT"
           git add -f backend/data/raw/bods/manifest.json || true
-          git commit -m 'BODS fetch report and compiled routes' || echo 'nothing changed'
-          git push || echo 'push failed'
+          git add backend/data/raw/real_bus_routes/compiled_bods.json.gz || true
+          git commit -m "BODS fetch report and compiled routes" || echo "nothing changed"
+          git push || echo "push failed"
+          echo "=== done ==="
+          } 2>&1 | tee -a "$REPORT"
