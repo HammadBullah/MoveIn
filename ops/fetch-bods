@@ -7,3 +7,4 @@
 # run 4: report via script; workflow now trivial
 # run 5: log path explicit, rebase before push
 # run 6: regional bulk GTFS, keyless, compiled per region
+# run 7: only the national file, recompiled --force so it carries the published times
