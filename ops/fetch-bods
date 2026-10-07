@@ -5,3 +5,4 @@
 
 2026-10-07T15:06:41Z run 3 — capture fixed
 # run 4: report via script; workflow now trivial
+# run 5: log path explicit, rebase before push
