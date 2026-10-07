@@ -316,7 +316,30 @@ async function main() {
     container.querySelector('.results__route')?.textContent,
   )
   check('every card quotes a price', /\£\d+\.\d\d/.test(text))
+  check(
+    'a dearer option says how much dearer, in words',
+    /\£\d+\.\d\d more/.test(text) || container.querySelector('.jcard__saving') === null,
+    container.querySelector('.jcard__saving')?.textContent,
+  )
   check('every card quotes a duration', /\d+h\s\d+m|\d+m/.test(text))
+
+  // Times.  The rest of the engine speaks in clock times ("14:37") while the
+  // journey carries timestamps, and code that assumes one shape renders empty
+  // strings for the other -- silently, as "--:--", on every card.
+  const cardTimes = Array.from(container.querySelectorAll('.jcard__times span'))
+    .map((node) => node.textContent.trim())
+    .filter((value) => /^\d/.test(value) || value.startsWith('--'))
+  check('every card states when it leaves and arrives', cardTimes.length >= 2, cardTimes.join(' | '))
+  check(
+    'the times are real clock times',
+    cardTimes.length > 0 && cardTimes.every((value) => /^\d{2}:\d{2}/.test(value)),
+    `card times: ${cardTimes.join(' | ')} (--:-- means the time could not be read)`,
+  )
+  check(
+    'no card is left showing placeholder times',
+    !container.querySelectorAll('.jcard__times')[0]?.textContent?.includes('--:--'),
+    container.querySelector('.jcard__times')?.textContent,
+  )
   check('the cards offer a way in', text.includes('View journey'))
   check('walking is stated on the card', /min walk|no walking/.test(text))
 
@@ -381,7 +404,20 @@ async function main() {
     const timeline = await waitFor('.timeline__stage')
     check('the detail screen shows a timeline', timeline.length > 0, `${timeline.length} stages`)
     check('stages are numbered', container.querySelector('.timeline__index') !== null)
-    check('the detail quotes times', container.querySelectorAll('.timeline__time').length > 0)
+    const stageTimes = Array.from(container.querySelectorAll('.timeline__time')).map((node) =>
+      node.textContent.trim(),
+    )
+    check('the detail quotes times', stageTimes.length > 0)
+    check(
+      'every stage is timed with real clock times',
+      stageTimes.length > 0 && stageTimes.every((value) => /\d{2}:\d{2}/.test(value)),
+      stageTimes.join(' | '),
+    )
+    check(
+      'a wait between stages is stated in minutes',
+      /\d+ min transfer/.test(container.textContent) || container.querySelectorAll('.timeline__stage').length === 1,
+      'expected "N min transfer" where a journey changes vehicle',
+    )
     check('the detail names the places', container.querySelectorAll('.timeline__place').length > 0)
     check(
       'the detail offers to start the journey',
@@ -421,6 +457,14 @@ async function main() {
         container.querySelector('.compare__row--best') !== null,
       )
       check('the comparison quotes prices', /\£\d+\.\d\d/.test(container.textContent))
+      const compareTimes = Array.from(container.querySelectorAll('.compare__clock')).map((node) =>
+        node.textContent.trim(),
+      )
+      check(
+        'the comparison states when each option leaves and arrives',
+        compareTimes.length >= 2 && compareTimes.every((value) => /\d{2}:\d{2}/.test(value)),
+        compareTimes.slice(0, 6).join(' | '),
+      )
       const back = Array.from(container.querySelectorAll('button')).find((b) =>
         b.textContent.includes('Back to results'),
       )

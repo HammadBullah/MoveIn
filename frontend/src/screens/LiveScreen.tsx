@@ -2,15 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Section } from '../components/Controls'
 import { Icon, ModeIcon } from '../components/Icons'
 import { MapCanvas } from '../components/MapCanvas'
-import { modeColour, modeLabel, money } from '../lib/format'
+import { clock, minutesBetween, modeColour, modeLabel, money, secondsOfDay } from '../lib/format'
 import { api } from '../lib/api'
 import type { Journey, Leg, LiveAlert, TrackResponse } from '../lib/types'
 
-function minutesUntil(value: string | undefined | null): number | null {
-  if (!value) return null
-  const stamp = Date.parse(value)
-  if (Number.isNaN(stamp)) return null
-  return Math.round((stamp - Date.now()) / 60000)
+/**
+ * How long until a timetable time, in minutes.
+ *
+ * The times on a journey are wall-clock times on the service day, so the
+ * comparison has to be in the same space as the clock on the wall -- parsing
+ * them as timestamps yields NaN and a countdown that never appears.
+ */
+function minutesUntil(value: string | undefined | null, now = secondsOfDay(new Date().toISOString())): number | null {
+  const at = secondsOfDay(value)
+  if (at === null || now === null) return null
+  let delta = at - now
+  if (delta < -12 * 3600) delta += 86_400
+  return Math.round(delta / 60)
 }
 
 /**
@@ -57,14 +65,16 @@ export function LiveScreen({
   }, [])
 
   const steps = useMemo(() => {
-    const now = Date.now()
+    const now = secondsOfDay(new Date().toISOString())
     return journey.legs.map((leg, index) => {
       const from = leg.kind === 'walk' ? leg.start_time : leg.departure
       const to = leg.kind === 'walk' ? leg.end_time : leg.arrival
-      const start = from ? Date.parse(from) : Number.NaN
-      const end = to ? Date.parse(to) : Number.NaN
-      const done = !Number.isNaN(end) && end < now
-      const active = !done && !Number.isNaN(start) && start <= now
+      const start = secondsOfDay(from)
+      const end = secondsOfDay(to)
+      // Nothing on the journey has a date, so a leg that ends before it starts
+      // ended yesterday: it is behind us, not ahead.
+      const done = end !== null && now !== null && (end < now || (start !== null && end < start))
+      const active = !done && start !== null && now !== null && start <= now
       return {
         index,
         leg,
@@ -130,7 +140,7 @@ export function LiveScreen({
         </span>
         <h2>You’re on your way</h2>
         <p className="muted small">
-          Arriving {journey.arrival_time ? journey.arrival_time.slice(11, 16) : '--:--'} ·{' '}
+          Arriving {clock(journey.arrival_time)} ·{' '}
           {journey.summary}
         </p>
       </div>
@@ -176,7 +186,7 @@ export function LiveScreen({
                 <em>{step.detail}</em>
               </span>
               <span className="step__time">
-                {(step.leg.kind === 'walk' ? step.leg.start_time : step.leg.departure)?.slice(11, 16)}
+                {clock(step.leg.kind === 'walk' ? step.leg.start_time : step.leg.departure)}
               </span>
             </div>
           ))}
@@ -219,12 +229,7 @@ export function LiveScreen({
               // What the switch costs, stated before it is made: a traveller
               // stranded at a platform wants the difference, not the price.
               const delta = option.price - journey.price
-              const arrivalShift = (() => {
-                const from = Date.parse(journey.arrival_time ?? '')
-                const to = Date.parse(option.arrival_time ?? '')
-                if (Number.isNaN(from) || Number.isNaN(to)) return null
-                return Math.round((to - from) / 60000)
-              })()
+              const arrivalShift = minutesBetween(journey.arrival_time, option.arrival_time)
               return (
               <div key={option.id} className="alt">
                 <span className="alt__body">
@@ -241,7 +246,7 @@ export function LiveScreen({
                     </span>
                   </strong>
                   <em>
-                    {option.duration_label} · arrives {option.arrival_time?.slice(11, 16)}
+                    {option.duration_label} · arrives {clock(option.arrival_time)}
                     {arrivalShift !== null && arrivalShift !== 0 && (
                       <>
                         {' '}
