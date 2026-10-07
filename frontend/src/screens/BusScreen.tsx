@@ -174,6 +174,11 @@ export function BusScreen({ onBack, from, to }: { onBack: () => void; from?: str
                       {route.operator} · {route.stop_count} stops
                       {route.description ? ` · ${route.description}` : ''}
                     </span>
+                    {route.first_time ? (
+                      <span className="bus__times tiny">
+                        <Icon name="clock" size={11} /> {route.first_time} → {route.last_time}
+                      </span>
+                    ) : null}
                   </span>
                   <Icon name="back" size={16} />
                 </button>
@@ -218,8 +223,22 @@ export function BusScreen({ onBack, from, to }: { onBack: () => void; from?: str
                       </span>
                       <span className="bus__stops">{option.stops_travelled} stops</span>
                     </div>
-                    <Row label="Board at" value={option.board.name} />
-                    <Row label="Get off at" value={option.alight.name} />
+                    <Row
+                      label="Board at"
+                      value={
+                        option.board.time
+                          ? `${option.board.time} · ${option.board.name}`
+                          : option.board.name
+                      }
+                    />
+                    <Row
+                      label="Get off at"
+                      value={
+                        option.alight.time
+                          ? `${option.alight.time} · ${option.alight.name}`
+                          : option.alight.name
+                      }
+                    />
                     <Row
                       label="Direction"
                       value={

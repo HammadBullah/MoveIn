@@ -81,9 +81,28 @@ operator's own published times for a schedule, not live running, and the route
 screen says so. A shape with no times still says `"has_times": false` rather
 than inventing a clock.
 
-**It is a slice, not the country.** Five operators of roughly 1,700 in the
-mirrored set — and only the routes whose stops come near MoveIn's NaPTAN
-extract.
+**The national file, compiled.** BODS also publishes its own converted GTFS
+for the whole country, and it needs no key at all:
+
+```
+https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/all/
+```
+
+A GitHub Actions runner downloads it (1.7 GB, 55 seconds) and
+`scripts/import_gtfs_routes.py` compiles it **straight out of the zip** — no
+11 GB unpack — into
+`backend/data/raw/real_bus_routes/compiled_bods_all.json.gz`. At the last
+import: **24,027 route-directions across 13,599 published lines, 548 operators,
+305,839 published stops, 906,392 stop calls**, every stop carrying the
+operator's own published departure time for the one representative trip MoveIn
+keeps per direction. With the mirror above merged in, the API serves **24,541
+routes** and `/api/bus/coverage` reports `"routes_with_times": 24,027`.
+
+**What it is not.** It is the *published* network, not every bus in Britain:
+roughly 1,700 operators run buses and 548 are in the file, so an operator appears
+only once it publishes to BODS. Each route carries one representative trip, not
+the full calendar, and there is no live running and no fares in this layer. All
+of that is stated in `/api/bus/coverage`, not just here.
 
 **How it grows — the regional published feeds.** BODS publishes its converted
 GTFS for the whole country and for each English region, **with no key needed**:
@@ -92,11 +111,14 @@ GTFS for the whole country and for each English region, **with no key needed**:
 https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/{all,england,east_midlands,…}/
 ```
 
-`ops/fetch-bods.sh` downloads those files, compiles each region on its own into
-`compiled_bods_<region>.json.gz` (ids scoped by region, so feeds merge without
-colliding) and drops the raw feed afterwards. The loader merges every
-`compiled*.json.gz` in `backend/data/raw/real_bus_routes/`, so an import *adds*
-to the network, and a run that finishes three regions still commits three.
+`ops/fetch-bods.sh` probes every regional file first and records its size in the
+run report, then downloads, compiles and commits them one at a time, stopping
+when its minute budget runs out; `ops/fetch-bods.args` says which regions a run
+should take (`--only all --force` is the current setting). Compiled files are
+named `compiled_bods_<region>.json.gz`, with ids scoped by region, so feeds merge
+without colliding. Raw feeds are deleted after compiling — only the compiled
+result is committed. The loader merges every `compiled*.json.gz` in
+`backend/data/raw/real_bus_routes/`, so an import *adds* to the network.
 
 **Why a GitHub runner does the downloading.** MoveIn's own sandbox has no route
 to BODS at all — the TLS handshake is dropped before a request is sent, and no
@@ -109,15 +131,17 @@ the result back; that is the only way data crosses into this repository.
 public: a runner downloaded one, keylessly, 8.7 MB).  The Department for
 Transport publishes its own client for exactly that job —
 [`department-for-transport-BODS/bods-data-extractor`](https://github.com/department-for-transport-BODS/bods-data-extractor)
-(`BODSDataExtractor`) — and MoveIn now uses it:
+(`BODSDataExtractor`) — and MoveIn has an adapter for it:
 `scripts/extract_bods_cities.py` points it at the ATCO areas of the cities the
 app models (330/339 Nottingham, 269/260 Leicester, 430 West Midlands, 450 West
 Yorkshire, 180 Greater Manchester, 490 London, and so on, taken from the
-committed NaPTAN extract). It runs on the runner **when the repository has a
-`BODS_API_KEY` secret**; without one the workflow says so and falls back to the
-keyless regional feeds. This environment cannot write repository secrets, so
-adding that secret is a one-click human step in GitHub: Settings → Secrets and
-variables → Actions → New repository secret.
+committed NaPTAN extract). **The adapter is dormant**: it runs only when the
+repository holds a `BODS_API_KEY` secret, and this environment cannot write
+repository secrets (the API forbids it), so today a run says so and takes the
+keyless national and regional files instead — which cover the same operators.
+Enabling the keyed phase is a one-click human step in GitHub: Settings →
+Secrets and variables → Actions → New repository secret. It is not needed for
+the coverage documented above.
 
 **Other published APIs, noted but not yet used:** `/api/v1/fares/dataset/`
 (808 published fares datasets, e.g. 16 covering Nottingham) and
@@ -139,11 +163,14 @@ wrong "no buses between Oxford and Banbury" answer until it was fixed.
 
 ### 4. The timetable layer
 
-**There is no complete, openly downloadable UK GTFS feed that this environment
-can reach.** `data.bus-data.dft.gov.uk` (BODS) and `api.tfl.gov.uk` are both
-unreachable from the sandbox, so MoveIn's timetable is **compiled from the real
-geography and the real operator registry rather than downloaded**, and every
-surface that shows a departure time says so.
+**This sandbox cannot reach any published feed.** `data.bus-data.dft.gov.uk`
+(BODS) and `api.tfl.gov.uk` are both unreachable from it — the TLS handshake is
+dropped before a request is sent — so MoveIn's *journey-planning* timetable is
+**compiled from the real geography and the real operator registry rather than
+downloaded**, and every surface that shows one of those departure times says so.
+The published bus layer in section 3b is the exception, and it exists because a
+GitHub runner does the downloading; what it carries is the operator's published
+times for one trip, and it says that too.
 
 What that means concretely:
 

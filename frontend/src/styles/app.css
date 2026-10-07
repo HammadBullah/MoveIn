@@ -3250,6 +3250,15 @@ input[type='range']::-webkit-slider-thumb {
   font-weight: 600;
 }
 
+.bus__times {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .bus__times-note {
   margin: 0 0 6px;
 }

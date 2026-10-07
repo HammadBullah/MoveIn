@@ -39,6 +39,12 @@ def network_or_404():
 
 
 def _route_summary(route) -> dict:
+    """One line about a route, including the clock when the feed published one.
+
+    The times are the operator's published departure at the first stop and
+    arrival at the last of the representative trip, so a list row can answer
+    "when does it run" without opening the route.
+    """
     return {
         "id": route.id,
         "service": route.service or route.id,
@@ -48,16 +54,21 @@ def _route_summary(route) -> dict:
         "stop_count": len(route.stops),
         "from": route.stops[0].name if route.stops else "",
         "to": route.stops[-1].name if route.stops else "",
+        "first_time": (route.stops[0].time or "") if route.stops else "",
+        "last_time": (route.stops[-1].time or "") if route.stops else "",
+        "has_times": bool(getattr(route, "has_times", False)),
         "source": route.source,
     }
 
 
 @bus.get("/coverage", summary="What real bus data MoveIn holds")
 def bus_coverage() -> dict:
-    """The honest headline: how many real routes, from how many operators.
+    """The honest headline: how many real routes, from how many operators, and
+    how much of it is a timetable.
 
-    Also says what this is *not*: there are no times in it.  A traveller who
-    reads "514 real bus routes" must not conclude the app knows when they run.
+    A traveller who reads "24,000 real bus routes" must also read that each one
+    carries a single representative trip, not the full timetable, and that the
+    layer is the published network rather than every bus in the country.
     """
     net = network_or_404()
     stats = net.stats()
@@ -71,8 +82,10 @@ def bus_coverage() -> dict:
             "Service. "
             + (
                 f"{with_times:,} of them also carry the departure times the "
-                "operator published for one representative trip; the rest are "
-                "shapes and stops only. Journey planning still uses MoveIn's "
+                "operator published for one representative trip per direction. "
+                "That is a real timetable, but it is one trip: the full "
+                "day-by-day timetable, real-time vehicle positions and fares are "
+                "not in this layer, and journey planning still uses MoveIn's "
                 "compiled timetable layer."
                 if with_times
                 else "This layer carries no departure times: timetables in MoveIn "
@@ -80,11 +93,12 @@ def bus_coverage() -> dict:
             )
         ),
         "coverage_note": (
-            "This is a real, growing slice of the national bus network -- not all "
-            "of it. It holds the services of the operators whose published route "
-            "data is mirrored in a machine-readable form MoveIn can ingest, and "
-            "only those whose stops fall inside MoveIn's NaPTAN stop register. "
-            "The UK has around 1,700 bus operators; /api/network/coverage reports "
+            "Every route-direction in the national GTFS file the Department for "
+            "Transport's Bus Open Data Service publishes, from every operator in "
+            "it -- 548 of the UK's operators at the last import, out of roughly "
+            "1,700. It is the published network, not the whole national network: "
+            "an operator appears only once its data is published to BODS, and "
+            "real-time positions are not included. /api/network/coverage reports "
             "the modelled network alongside this."
         ),
     }

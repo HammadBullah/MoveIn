@@ -77,6 +77,11 @@ export function MapCanvas({
   const [networkCount, setNetworkCount] = useState<number | null>(null)
   const [realBusOn, setRealBusOn] = useState(showRealBus)
   const [realBusCount, setRealBusCount] = useState<number | null>(null)
+  const [realBusTotal, setRealBusTotal] = useState<number | null>(null)
+  // The published bus layer follows the viewport: at national scale the country
+  // holds 24,000 published route-directions, and drawing an arbitrary 400 of
+  // them would be a lie about what is on screen.
+  const [viewportTick, setViewportTick] = useState(0)
   const [tilesDown, setTilesDown] = useState(false)
   const [scale, setScale] = useState<{ px: number; label: string } | null>(null)
 
@@ -112,14 +117,20 @@ export function MapCanvas({
     realBusRef.current = L.layerGroup().addTo(map)
     realRouteRef.current = L.layerGroup().addTo(map)
 
+    let moved: ReturnType<typeof setTimeout> | undefined
     const sync = () => {
       setZoom(map.getZoom())
       setScale(scaleFor(map))
+      // Debounced: a drag fires moveend repeatedly, and each settle asks the
+      // API for the routes in view.
+      if (moved) clearTimeout(moved)
+      moved = setTimeout(() => setViewportTick((tick) => tick + 1), 400)
     }
     map.on('zoom zoomend moveend', sync)
     sync()
 
     return () => {
+      if (moved) clearTimeout(moved)
       map.off('zoom zoomend moveend', sync)
       map.remove()
       mapRef.current = null
@@ -329,15 +340,24 @@ export function MapCanvas({
 
     let cancelled = false
     const pane = map.getPane('network') ? 'network' : map.createPane('network') && 'network'
+    // The ground the map is showing, plus a margin, as a point and a radius.
+    const centre = map.getCenter()
+    const radius = Math.max(1000, Math.min(200_000, centre.distanceTo(map.getBounds().getNorthEast())))
 
     runWhenIdle(() => {
       // A national payload: trim hard, because at this zoom the difference
       // between a road and a straight line is a few pixels.
       api
-        .realBusMap({ simplify_m: 120 })
+        .realBusMap({
+          lat: centre.lat,
+          lon: centre.lng,
+          radius_m: Math.round(radius),
+          simplify_m: 120,
+        })
         .then((response) => {
           if (cancelled) return
-          setRealBusCount(response.total_matching || response.count)
+          setRealBusCount(response.count)
+          setRealBusTotal(response.total_matching || response.count)
           for (const feature of response.features) {
             L.polyline(feature.coordinates as [number, number][], {
               pane,
@@ -350,13 +370,16 @@ export function MapCanvas({
             }).addTo(group)
           }
         })
-        .catch(() => setRealBusCount(null))
+        .catch(() => {
+          setRealBusCount(null)
+          setRealBusTotal(null)
+        })
     })
 
     return () => {
       cancelled = true
     }
-  }, [realBusOn])
+  }, [realBusOn, viewportTick])
 
   // --- one published route, drawn properly ---------------------------------
   useEffect(() => {
@@ -476,10 +499,10 @@ export function MapCanvas({
           >
             <Icon name="bus" size={15} />
             <span>
-              {realBusOn
-                ? realBusCount
-                  ? `${realBusCount} real bus routes`
-                  : 'Real bus routes'
+              {realBusOn && realBusCount
+                ? realBusTotal && realBusTotal > realBusCount
+                  ? `${realBusCount} of ${realBusTotal} published`
+                  : `${realBusCount} published routes`
                 : 'Published buses'}
             </span>
           </button>

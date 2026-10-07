@@ -616,6 +616,9 @@ async function main() {
     window.location.hash = '#/bus'
   })
   const busRows = await waitFor('.bus__row')
+  // The banner is a second request (the coverage counts), so wait for it
+  // before reading the screen's text.
+  await waitFor('.bus__banner')
   const busText = container.textContent
   check('the bus screen lists real routes', busRows.length > 0, `${busRows.length} rows`)
   check(
@@ -668,10 +671,19 @@ async function main() {
       const options = await waitFor('.bus__option')
       check('a corridor returns real services', options.length > 0, `${options.length} options`)
       const optionText = options[0]?.textContent || ''
+      // Which service ranks first depends on the data, so this asks for a
+      // service *number* and the two boarding facts rather than naming one.
       check(
         'a corridor says which service to catch and where to board',
-        /148/.test(optionText) && /Board at/.test(optionText) && /Get off at/.test(optionText),
+        /(^|\D)\d{1,4}\w*(\s|$)/.test(optionText) &&
+          /Board at/.test(optionText) &&
+          /Get off at/.test(optionText),
         optionText.replace(/\s+/g, ' ').slice(0, 120),
+      )
+      check(
+        'a corridor says when the bus goes',
+        /\d{1,2}:\d{2}/.test(optionText),
+        (optionText.match(/\d{1,2}:\d{2}[^,]*/) || ['no clock on the card'])[0].slice(0, 60),
       )
       check(
         'a corridor names its direction honestly',

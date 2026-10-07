@@ -223,6 +223,7 @@ class RealBusNetwork:
                 ),
             )
             self.routes[route.id] = route
+        self._stats: dict | None = None
         self._by_operator: dict[str, list[str]] = {}
         self._by_stop: dict[str, list[str]] = {}
         for route in self.routes.values():
@@ -423,11 +424,18 @@ class RealBusNetwork:
     # -- honesty ----------------------------------------------------------
 
     def stats(self) -> dict:
-        """The counts the product quotes, computed from the data, never guessed."""
+        """The counts the product quotes, computed from the data, never guessed.
+
+        Computed once: the network is immutable after loading, and on the
+        national file the stop counts walk 24,000 routes and 900,000 stop calls,
+        which is a second of work every screen would otherwise pay again.
+        """
+        if self._stats is not None:
+            return self._stats
         operators = self.operators()
         services = self.services()
         stops = self.stops()
-        return {
+        self._stats = {
             "routes": len(self.routes),
             "services": len(services),
             "operators": len(operators),
@@ -443,6 +451,7 @@ class RealBusNetwork:
             "shape_points": sum(len(route.shape) for route in self.routes.values()),
             "attribution": self.attribution,
         }
+        return self._stats
 
 
 def load_real_bus_network(path: Path) -> RealBusNetwork:

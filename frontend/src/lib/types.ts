@@ -389,6 +389,11 @@ export interface RealBusRouteSummary {
   stop_count: number
   from: string
   to: string
+  /** Departure at the first stop of the operator's published sample trip. */
+  first_time?: string
+  /** Arrival at the last stop of that trip. */
+  last_time?: string
+  has_times?: boolean
   source: string
 }
 
