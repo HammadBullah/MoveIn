@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, Chip, Sheet } from '../components/Controls'
 import { Icon } from '../components/Icons'
 import { JourneyCard } from '../components/JourneyCards'
@@ -22,7 +22,6 @@ export function ResultsScreen({
   when,
   preference,
   sheetHeight,
-  longWalkCount,
   onPreference,
   onSheetHeight,
   onBack,
@@ -39,7 +38,6 @@ export function ResultsScreen({
   when: string
   preference: string
   sheetHeight: 'half' | 'full'
-  longWalkCount: number
   onPreference: (next: string) => void
   onSheetHeight: (next: 'half' | 'full') => void
   onBack: () => void
@@ -66,6 +64,27 @@ export function ResultsScreen({
     bestValue && cheapest && bestValue.id !== cheapest.id
       ? explainBestValue(bestValue, cheapest)
       : null
+
+  // The promise is a 15-minute longest walk.  Anything beyond it is still a
+  // real option, but it is not the answer to "how do I get there" -- so it waits
+  // in its own section until the traveller asks for it, and the headline
+  // badges never go to it.
+  const { comfortable, longWalk, cheapestLongWalk } = useMemo(() => {
+    const comfortable: Journey[] = []
+    const longWalk: Journey[] = []
+    for (const journey of journeys) {
+      if (journey.walk_comfort === 'long') longWalk.push(journey)
+      else comfortable.push(journey)
+    }
+    const cheapestLongWalk = longWalk.reduce<Journey | null>(
+      (best, j) => (!best || j.price < best.price ? j : best),
+      null,
+    )
+    return { comfortable, longWalk, cheapestLongWalk }
+  }, [journeys])
+  const [showLongWalks, setShowLongWalks] = useState(false)
+  const onlyLongWalks = comfortable.length === 0 && longWalk.length > 0
+  const revealLongWalks = showLongWalks || onlyLongWalks
 
   return (
     <div className="screen screen--results">
@@ -176,23 +195,50 @@ export function ResultsScreen({
               </p>
             )}
 
-            <div className="jlist">
-              {journeys.map((journey) => (
-                <JourneyCard
-                  key={journey.id}
-                  journey={journey}
-                  cheapestPrice={cheapest?.price}
-                  onOpen={() => onOpenJourney(journey)}
-                  onCompare={onCompare}
-                />
-              ))}
-            </div>
+            {comfortable.length > 0 && (
+              <div className="jlist">
+                {comfortable.map((journey) => (
+                  <JourneyCard
+                    key={journey.id}
+                    journey={journey}
+                    cheapestPrice={cheapest?.price}
+                    onOpen={() => onOpenJourney(journey)}
+                    onCompare={onCompare}
+                  />
+                ))}
+              </div>
+            )}
 
-            {longWalkCount > 0 && (
-              <p className="results__longwalk">
-                <Icon name="walk" size={14} />
-                {longWalkCount} of these include a walk of more than 15 minutes.
-              </p>
+            {longWalk.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  className={`longwalk__toggle${revealLongWalks ? ' is-open' : ''}`}
+                  aria-expanded={revealLongWalks}
+                  onClick={() => setShowLongWalks((open) => !open)}
+                >
+                  <Icon name="walk" size={16} />
+                  <span>
+                    Shorter walks only, or {longWalk.length} more option
+                    {longWalk.length === 1 ? '' : 's'} with a longer walk
+                    {cheapestLongWalk && <> — the cheapest is {money(cheapestLongWalk.price)}</>}
+                  </span>
+                  <Icon name="chevronDown" size={16} />
+                </button>
+                {revealLongWalks && (
+                  <div className="jlist jlist--longwalk">
+                    {longWalk.map((journey) => (
+                      <JourneyCard
+                        key={journey.id}
+                        journey={journey}
+                        cheapestPrice={cheapest?.price}
+                        onOpen={() => onOpenJourney(journey)}
+                        onCompare={onCompare}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="results__footer">

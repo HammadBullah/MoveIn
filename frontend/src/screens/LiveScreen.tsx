@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Section } from '../components/Controls'
 import { Icon, ModeIcon } from '../components/Icons'
 import { MapCanvas } from '../components/MapCanvas'
-import { modeColour, modeLabel } from '../lib/format'
+import { modeColour, modeLabel, money } from '../lib/format'
 import { api } from '../lib/api'
 import type { Journey, Leg, LiveAlert, TrackResponse } from '../lib/types'
 
@@ -215,14 +215,40 @@ export function LiveScreen({
       {alternatives.length > 0 && (
         <Section title="Alternative journeys">
           <div className="card card--list">
-            {alternatives.map((option) => (
+            {alternatives.map((option) => {
+              // What the switch costs, stated before it is made: a traveller
+              // stranded at a platform wants the difference, not the price.
+              const delta = option.price - journey.price
+              const arrivalShift = (() => {
+                const from = Date.parse(journey.arrival_time ?? '')
+                const to = Date.parse(option.arrival_time ?? '')
+                if (Number.isNaN(from) || Number.isNaN(to)) return null
+                return Math.round((to - from) / 60000)
+              })()
+              return (
               <div key={option.id} className="alt">
                 <span className="alt__body">
                   <strong>
                     {option.mode_label} · {option.price_label}
+                    <span
+                      className={`alt__delta${delta > 0 ? ' alt__delta--up' : delta < 0 ? ' alt__delta--down' : ''}`}
+                    >
+                      {delta === 0
+                        ? 'same price'
+                        : delta > 0
+                          ? `+${money(delta)} more`
+                          : `${money(-delta)} cheaper`}
+                    </span>
                   </strong>
                   <em>
                     {option.duration_label} · arrives {option.arrival_time?.slice(11, 16)}
+                    {arrivalShift !== null && arrivalShift !== 0 && (
+                      <>
+                        {' '}
+                        ({arrivalShift > 0 ? '+' : '−'}
+                        {Math.abs(arrivalShift)} min)
+                      </>
+                    )}
                   </em>
                 </span>
                 <Button size="sm" onClick={() => onSwitch(option)}>
@@ -236,7 +262,8 @@ export function LiveScreen({
                   Details
                 </button>
               </div>
-            ))}
+              )
+            })}
           </div>
         </Section>
       )}

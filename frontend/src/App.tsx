@@ -169,11 +169,6 @@ export default function App() {
     window.location.hash = `#/${next}`
   }
 
-  const longWalkCount = useMemo(
-    () => (result?.journeys ?? []).filter((journey) => journey.walk_comfort === 'long').length,
-    [result],
-  )
-
   const createAlert = async (target: number | null) => {
     if (!result) return
     setSavingAlert(true)
@@ -204,7 +199,6 @@ export default function App() {
           when={query.when}
           preference={query.preference}
           sheetHeight={sheetHeight}
-          longWalkCount={longWalkCount}
           onPreference={(next) => {
             const updated = { ...query, preference: next }
             setQuery(updated)

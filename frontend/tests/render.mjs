@@ -120,6 +120,18 @@ async function main() {
     /Best value|Cheapest|Fastest|Fewest changes|Least walking/.test(text),
   )
 
+  // The 15-minute promise: on the default limit there is nothing to warn about.
+  check(
+    'the default list is free of long walks',
+    container.querySelector('.jlist--longwalk') === null,
+  )
+  check(
+    'no card in the default list warns about a long walk',
+    !Array.from(container.querySelectorAll('.jlist .jcard')).some((c) =>
+      c.textContent.includes('Long walk'),
+    ),
+  )
+
   // ---- journey detail ----------------------------------------------------
   const viewButton = Array.from(container.querySelectorAll('.jcard button')).find((b) =>
     b.textContent.includes('View journey'),
@@ -187,13 +199,55 @@ async function main() {
     const tiles = container.querySelectorAll('.mode-tile')
     check('the filter sheet offers every mode', tiles.length >= 8, `${tiles.length} mode tiles`)
     check('the filter sheet offers preferences', container.querySelectorAll('.chip').length > 4)
-    check('the filter sheet has a walking limit', container.querySelectorAll('input[type=range]').length >= 2)
+    const ranges = container.querySelectorAll('input[type=range]')
+    check('the filter sheet has a walking limit', ranges.length >= 2)
+
+    // Ask for longer walks than the promise allows, the way a traveller with a
+    // heavy bag and no bus stop nearby would.
+    if (ranges.length) {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      ).set
+      await act(async () => {
+        setter.call(ranges[0], '30')
+        ranges[0].dispatchEvent(new window.Event('input', { bubbles: true }))
+        ranges[0].dispatchEvent(new window.Event('change', { bubbles: true }))
+      })
+      check('the walking limit can be widened', container.textContent.includes('30 min'))
+    }
+
     const apply = Array.from(container.querySelectorAll('button')).find((b) =>
       b.textContent.includes('Apply'),
     )
     check('the filter sheet can be applied', Boolean(apply))
     if (apply) await click(apply)
-    await settle(200)
+    const toggle = await waitFor('.longwalk__toggle')
+    check('widening the walk limit surfaces the hidden options', toggle.length > 0)
+
+    const longer = toggle[0]
+    if (longer) {
+      check(
+        'the label says how many options are hidden',
+        /\d+ more option/.test(longer.textContent),
+        longer.textContent.slice(0, 120),
+      )
+      check(
+        'the hidden options stay hidden until asked for',
+        container.querySelector('.jlist--longwalk') === null,
+        'and the label says what is down there',
+      )
+      const before = container.querySelectorAll('.jcard').length
+      await click(longer)
+      const after = container.querySelectorAll('.jcard').length
+      check('opening the section reveals them', after > before, `${before} -> ${after}`)
+      check(
+        'the revealed rows are flagged as long walks',
+        Boolean(container.querySelector('.jlist--longwalk .jcard')?.textContent?.includes('Long walk')),
+      )
+      await click(longer)
+      check('closing it hides them again', container.querySelector('.jlist--longwalk') === null)
+    }
   }
 
   // ---- home --------------------------------------------------------------

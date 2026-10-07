@@ -1424,13 +1424,55 @@ input[type='range']::-webkit-slider-thumb {
   gap: 10px;
 }
 
-.results__longwalk {
+/* Anything past the 15-minute walk promise waits down here, behind a label that
+   says what it costs to open.  It is a real option; it is not the answer. */
+.longwalk__toggle {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 0.78rem;
+  gap: 9px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 13px 14px;
+  border: 1px dashed color-mix(in srgb, var(--amber) 42%, transparent);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
   color: var(--amber);
-  padding: 2px;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--fast), transform var(--fast);
+}
+
+.longwalk__toggle:hover {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+
+.longwalk__toggle:active {
+  transform: scale(0.995);
+}
+
+.longwalk__toggle > svg:first-child {
+  flex: none;
+}
+
+.longwalk__toggle > span {
+  flex: 1;
+}
+
+.longwalk__toggle > svg:last-child {
+  flex: none;
+  transition: transform var(--fast);
+}
+
+.longwalk__toggle.is-open > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.jlist--longwalk {
+  margin-top: 10px;
 }
 
 .results__footer {
@@ -2156,6 +2198,24 @@ input[type='range']::-webkit-slider-thumb {
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+/* The cost of switching, said in money rather than in arithmetic. */
+.alt__delta {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--green) 13%, transparent);
+  color: var(--green);
+  font-size: 0.7rem;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.alt__delta--up {
+  background: color-mix(in srgb, var(--amber) 15%, transparent);
+  color: var(--amber);
 }
 
 .alt__body strong {
