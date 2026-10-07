@@ -229,16 +229,28 @@ for a real authenticated user without changing any call site.
 
 ```bash
 .venv/bin/python -m pytest backend/tests -q     # the engine, the pipeline, every endpoint
-cd frontend && npm run test:render             # the planning screen, rendered and asserted on
+cd frontend && npm run test:render             # the app, rendered in a DOM and asserted on
+cd frontend && npm run map:preview             # write the journey map out as an SVG (API must be up)
+.venv/bin/python scripts/render_map_preview.py # ...and rasterise it, for looking at
 ```
 
 The render test mounts the real app in a DOM against the real API and walks the
-journey a traveller would take: the results sheet and its option cards, the map
-drawn from real coordinates, the numbered timeline behind "View journey", live
-mode, the price comparison, the transport filter, and the Home screen with its
-bottom navigation. It asserts on prices, durations, walking and badges — what a
-person actually reads. A type-check does not tell you whether a page renders or
-what it says.
+journey a traveller would take: the results sheet and its option cards, the
+numbered timeline behind "View journey", live mode, the price comparison, the
+transport filter, and the Home screen with its bottom navigation. It asserts on
+prices, durations, walking and badges — what a person actually reads. A
+type-check does not tell you whether a page renders or what it says.
+
+It is also given a phone-sized frame, because jsdom has no layout: every element
+reports zero size unless a test says otherwise. That matters — the map sizes
+itself from its container, so a zero-sized frame is not a smaller version of the
+real thing, it is a different code path, and one that hid a map which never grew
+past its default height. The map is asserted on as geometry: that the route runs
+through the stops the vehicle calls at rather than straight past them, that it is
+drawn above the sheet rather than behind it, that it fills the frame it was
+given. `npm run map:preview` writes the same map out as an SVG (with
+`scripts/render_map_preview.py` to rasterise it), because a two-vertex line and a
+fourteen-vertex line pass the same DOM query, and only one of them is a route.
 
 The suite runs against the real compiled feed rather than a synthetic fixture,
 because the bugs worth catching are in the data: a corridor that does not

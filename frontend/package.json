@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "MoveIn \u2014 all-in-one multi-modal UK journey planner",
+  "description": "MoveIn — all-in-one multi-modal UK journey planner",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b --noCheck && vite build",

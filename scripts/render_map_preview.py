@@ -57,19 +57,77 @@ def _points(path: str, step: int) -> list[tuple[float, float]]:
     return out
 
 
-def render(svg_path: Path, out_path: Path) -> tuple[int, int]:
+TOKEN_RE = re.compile(r":root\s*\{(.*?)\}", re.S)
+TOKEN_DEF = re.compile(r"--([a-z0-9-]+):\s*([^;]+);")
+
+
+def tokens_from_css(css_path: Path) -> dict[str, str]:
+    """The app's own custom properties, so the preview is the app's colours."""
+    if not css_path.exists():
+        return {}
+    block = TOKEN_RE.search(css_path.read_text())
+    if not block:
+        return {}
+    return {name: value.strip() for name, value in TOKEN_DEF.findall(block.group(1))}
+
+
+def resolve_tokens(svg: str, tokens: dict[str, str]) -> str:
+    for _ in range(4):  # tokens may refer to other tokens
+        changed = False
+        for name, value in tokens.items():
+            marker = f"var(--{name})"
+            if marker in svg:
+                svg = svg.replace(marker, value)
+                changed = True
+        if not changed:
+            break
+    return svg
+
+
+def render(svg_path: Path, out_path: Path, css_path: Path | None = None) -> tuple[int, int]:
     svg = svg_path.read_text()
+    svg = resolve_tokens(svg, tokens_from_css(css_path) if css_path else {})
     view = re.search(r'viewBox="0 0 ([\d.]+) ([\d.]+)"', svg)
     if not view:
         raise SystemExit(f"{svg_path} has no viewBox")
     width, height = int(float(view.group(1))), int(float(view.group(2)))
     scale = SUPERSAMPLE
+    ground = re.search(r'<rect[^>]*fill="(#[0-9a-fA-F]{6})"', svg)
+    ground = ground.group(1) if ground else "#f1f4fb"
 
-    image = Image.new("RGB", (width * scale, height * scale), "#eef1fb")
+    image = Image.new("RGB", (width * scale, height * scale), ground)
     draw = ImageDraw.Draw(image)
     label_font = _font(FONT, 9 * scale)
     grid_font = _font(FONT_BOLD, 8 * scale)
     terminal_font = _font(FONT_BOLD, 11 * scale)
+
+    patterns = {
+        match.group(1): {
+            "size": (float(match.group(2)), float(match.group(3))),
+            "stroke": (re.search(r'stroke="([^"]+)"', match.group(0)) or [None, "#e4e8f3"])[1],
+            "width": float((re.search(r'strokeWidth="([\d.]+)"', match.group(0)) or [None, "1"])[1]),
+        }
+        for match in re.finditer(
+            r'<pattern id="([^"]+)" width="([\d.]+)" height="([\d.]+)"[^>]*>(.*?)</pattern>',
+            svg,
+            re.S,
+        )
+        if "vignette" not in match.group(1)
+    }
+    for match in re.finditer(r'<rect[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"[^>]*fill="url\(#([^)]+)\)"', svg):
+        pattern = patterns.get(match.group(3))
+        if not pattern:
+            continue
+        step_x, step_y = pattern["size"]
+        colour = pattern["stroke"] if pattern["stroke"].startswith("#") else "#e4e8f3"
+        x = 0.0
+        while x <= float(match.group(1)):
+            draw.line([x * scale, 0, x * scale, height * scale], fill=colour, width=max(1, int(pattern["width"] * scale)))
+            x += step_x
+        y = 0.0
+        while y <= float(match.group(2)):
+            draw.line([0, y * scale, width * scale, y * scale], fill=colour, width=max(1, int(pattern["width"] * scale)))
+            y += step_y
 
     for line in re.finditer(r"<line[^>]*>", svg):
         numbers = {key: float(value) for key, value in re.findall(r'(x1|y1|x2|y2)="([-\d.]+)"', line.group(0))}
@@ -149,7 +207,7 @@ def main() -> None:
     out_path = Path(sys.argv[2]) if len(sys.argv) > 2 else svg_path.with_suffix(".png")
     if not svg_path.exists():
         raise SystemExit(f"no {svg_path} -- run `cd frontend && npm run map:preview` first")
-    width, height = render(svg_path, out_path)
+    width, height = render(svg_path, out_path, root / "frontend/src/styles/app.css")
     print(f"wrote {out_path} ({width}x{height})")
 
 

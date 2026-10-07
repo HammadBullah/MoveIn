@@ -56,16 +56,17 @@ export function MapCanvas({
   const [zoom, setZoom] = useState(0)
   const [pan, setPan] = useState<{ x: number; y: number } | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
-  const [box, setBox] = useState({ width: 720, height: 300 })
+  const [box, setBox] = useState({ width: 0, height: 0 })
 
+  // Measuring, not sizing.  In `fill` mode the element's height comes from CSS
+  // (it is inset in its container); this only reads the result to build the
+  // viewBox.  Setting the height from the measurement would be circular, and
+  // would leave the map stuck at whatever it measured first.
+  const fill = height === 'fill'
   useEffect(() => {
     const node = wrapRef.current
     if (!node) return
-    const measure = () =>
-      setBox({
-        width: node.clientWidth || 720,
-        height: node.clientHeight || 300,
-      })
+    const measure = () => setBox({ width: node.clientWidth, height: node.clientHeight })
     measure()
     if (typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(measure)
@@ -74,9 +75,12 @@ export function MapCanvas({
   }, [])
 
   // A map that fills its frame stays a map whatever the frame is: the sheet
-  // over it can be half-open or full, and the route keeps its own room.
-  const width = box.width
-  const frameHeight = height === 'fill' ? Math.max(160, box.height) : height
+  // over it can be half open or full, and the route keeps its own room.
+  const width = box.width || 720
+  // The height actually drawn: the measured frame, or a sane default before the
+  // first measurement lands (and if the container is ever hidden).
+  const measured = fill ? box.height : height
+  const drawHeight = measured >= 80 ? measured : 300
 
   // A new journey is a new frame: never leave the previous route's zoom behind.
   useEffect(() => {
@@ -85,21 +89,26 @@ export function MapCanvas({
   }, [journey?.id])
 
   const geometry = useMemo(
-    () => (journey ? project(journey, width, frameHeight, zoom, pan, reserveBottom) : null),
-    [journey, width, frameHeight, zoom, pan, reserveBottom],
+    () => (journey ? project(journey, width, drawHeight, zoom, pan, reserveBottom) : null),
+    [journey, width, drawHeight, zoom, pan, reserveBottom],
   )
 
   if (!journey || !geometry) {
     return (
-      <div className="map map--empty" style={{ height: frameHeight }} ref={wrapRef}>
-        <div className="map__roads" aria-hidden>
+      <div
+        className={`map map--empty${fill ? ' map--fill' : ''}`}
+        style={fill ? undefined : { height: drawHeight }}
+        ref={wrapRef}
+      >
+        <div className="map__base" aria-hidden>
           <svg viewBox="0 0 100 100" preserveAspectRatio="none">
             <defs>
-              <pattern id="movein-empty-grid" width="9" height="9" patternUnits="userSpaceOnUse">
-                <path d="M9 0H0v9" fill="none" stroke="var(--line)" strokeWidth="0.4" />
+              <pattern id="movein-empty-streets" width="4" height="6" patternUnits="userSpaceOnUse">
+                <path d="M4 0H0v6" fill="none" stroke="var(--map-street)" strokeWidth="0.5" />
               </pattern>
             </defs>
-            <rect width="100" height="100" fill="url(#movein-empty-grid)" />
+            <rect width="100" height="100" fill="var(--map-land)" />
+            <rect width="100" height="100" fill="url(#movein-empty-streets)" />
           </svg>
         </div>
         <div className="map__empty-note">
@@ -141,10 +150,39 @@ export function MapCanvas({
   const namedWaypoints = layoutLabels(entries, obstacles)
 
   return (
-    <div className="map" style={{ height: frameHeight }} ref={wrapRef}>
+    <div
+      className={`map${fill ? ' map--fill' : ''}`}
+      style={fill ? undefined : { height: drawHeight }}
+      ref={wrapRef}
+    >
+      {/* The base layer.  This is a stylised frame, not a claim about roads:
+          the engine's geography is stops and coordinates, so the texture is
+          deliberately abstract -- a regular grid at two scales plus a wash, to
+          give the route something to be a route across. */}
+      <div className="map__base" aria-hidden>
+        <svg viewBox={`0 0 ${width} ${drawHeight}`} preserveAspectRatio="none">
+          <defs>
+            <pattern id="movein-streets" width="30" height="30" patternUnits="userSpaceOnUse">
+              <path d="M30 0H0v30" fill="none" stroke="var(--map-street)" strokeWidth="1.3" />
+            </pattern>
+            <pattern id="movein-roads" width="150" height="150" patternUnits="userSpaceOnUse">
+              <path d="M150 0H0v150" fill="none" stroke="var(--map-road)" strokeWidth="2.6" />
+            </pattern>
+            <radialGradient id="movein-vignette" cx="50%" cy="38%" r="78%">
+              <stop offset="55%" stopColor="#ffffff" stopOpacity="0" />
+              <stop offset="100%" stopColor="#c9d0e4" stopOpacity="0.34" />
+            </radialGradient>
+          </defs>
+          <rect width={width} height={drawHeight} fill="var(--map-land)" />
+          <rect width={width} height={drawHeight} fill="url(#movein-streets)" />
+          <rect width={width} height={drawHeight} fill="url(#movein-roads)" />
+          <rect width={width} height={drawHeight} fill="url(#movein-vignette)" />
+        </svg>
+      </div>
+
       <svg
         className="map__canvas"
-        viewBox={`0 0 ${width} ${frameHeight}`}
+        viewBox={`0 0 ${width} ${drawHeight}`}
         role="img"
         aria-label={`Route from ${anchors[0]?.name} to ${anchors[anchors.length - 1]?.name}`}
         onWheel={
@@ -160,7 +198,7 @@ export function MapCanvas({
             labelled, so it reads as a frame rather than as geography. */}
         <g className="map__graticule" aria-hidden>
           {graticule.meridians.map((line) => (
-            <line key={`m${line.value}`} x1={line.x} y1={0} x2={line.x} y2={frameHeight} />
+            <line key={`m${line.value}`} x1={line.x} y1={0} x2={line.x} y2={drawHeight} />
           ))}
           {graticule.parallels.map((line) => (
             <line key={`p${line.value}`} x1={0} y1={line.y} x2={width} y2={line.y} />

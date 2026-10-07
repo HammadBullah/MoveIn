@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FilterSheet, DEFAULT_FILTERS, type Filters } from './components/FilterSheet'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Icon } from './components/Icons'
 import { HomeScreen, type HomeValue } from './screens/HomeScreen'
 import { ResultsScreen } from './screens/ResultsScreen'
@@ -379,7 +380,7 @@ export default function App() {
     <div className="app">
       <div className="phone">
         <main className={`viewport viewport--${view}`} key={`${view}-${params.toString()}`}>
-          {body()}
+          <ErrorBoundary key={view} label={view}>{body()}</ErrorBoundary>
         </main>
 
         {chrome && (

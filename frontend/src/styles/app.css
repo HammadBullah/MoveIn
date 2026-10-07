@@ -38,6 +38,12 @@
   --r-lg: 24px;
   --r-xl: 32px;
 
+  /* The map: a stylised frame around real coordinates. */
+  --map-land: #f1f4fb;
+  --map-street: #e7ebf5;
+  --map-road: #dbe1ef;
+  --map-grid: #c9d0e2;
+
   --shadow-1: 0 1px 2px rgba(11, 14, 22, 0.05), 0 6px 18px rgba(11, 14, 22, 0.05);
   --shadow-2: 0 2px 6px rgba(11, 14, 22, 0.06), 0 18px 42px rgba(11, 14, 22, 0.14);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -1093,16 +1099,34 @@ input[type='range']::-webkit-slider-thumb {
   padding: 4px 10px;
 }
 
+.screen--error {
+  justify-content: center;
+  padding: 24px 18px;
+}
+
+.error__detail {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border-radius: var(--r-xs);
+  background: var(--red-soft);
+  color: var(--red);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* -- the map -------------------------------------------------------------- */
 
 .map {
   position: relative;
-  background: linear-gradient(180deg, #f7f8fd 0%, #eef1fb 100%);
+  background: var(--map-land);
   overflow: hidden;
+  isolation: isolate;
 }
 
-.map__roads,
-.map__roads svg,
+.map__base,
+.map__base svg,
 .map__canvas {
   position: absolute;
   inset: 0;
@@ -1110,8 +1134,17 @@ input[type='range']::-webkit-slider-thumb {
   height: 100%;
 }
 
-.map__roads {
+.map__base {
   pointer-events: none;
+}
+
+/* Filling a container must come from CSS: a height set from a measurement of
+   the same element is circular, and sticks at whatever it measured first. */
+.map--fill {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  min-height: 180px;
 }
 
 .map__canvas {
@@ -1145,9 +1178,9 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .map__graticule line {
-  stroke: color-mix(in srgb, var(--muted-2) 30%, transparent);
+  stroke: var(--map-grid);
   stroke-width: 1;
-  stroke-dasharray: 3 5;
+  stroke-dasharray: 4 6;
 }
 
 .map__stop-label {
@@ -1162,10 +1195,14 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .map__grid-label {
-  font-size: 8.5px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 650;
   letter-spacing: 0.02em;
-  fill: color-mix(in srgb, var(--muted) 78%, transparent);
+  fill: var(--muted-2);
+  paint-order: stroke;
+  stroke: var(--map-land);
+  stroke-width: 2.4px;
+  stroke-linejoin: round;
 }
 
 /* A distance a person can read off, in the units they think in. */

@@ -65,22 +65,35 @@ if (pick >= 0 && cards[pick]) {
 }
 const svg = container.querySelector('svg.map__canvas')
 if (!svg) { console.error('no map found'); process.exit(1) }
+const base = container.querySelector('.map__base svg')
 const w = Number(svg.getAttribute('viewBox').split(' ')[2])
 const h = Number(svg.getAttribute('viewBox').split(' ')[3])
 // The app styles its SVG with classes; resolve them literally for the rasteriser.
 const style = `
   <style>
-    .map__graticule line { stroke: #c9ced9; stroke-width: 1; stroke-dasharray: 3 5; }
-    .map__grid-label { font-size: 8.5px; font-weight: 600; fill: #9aa1b1; font-family: Helvetica, Arial, sans-serif; }
+    .map__graticule line { stroke: #c6cde0; stroke-width: 1; stroke-dasharray: 4 6; }
+    .map__grid-label { font-size: 9px; font-weight: 650; fill: #98a0b3; paint-order: stroke; stroke: #f1f4fb; stroke-width: 2.4px; font-family: Helvetica, Arial, sans-serif; }
     .map__stop-label { font-size: 9.5px; font-weight: 600; fill: #202534; font-family: Helvetica, Arial, sans-serif; }
     .map__label { font-size: 11px; font-weight: 650; fill: #0b0e16; stroke: #fff; stroke-width: 3.2px; paint-order: stroke; font-family: Helvetica, Arial, sans-serif; }
     .map__stop { fill: #ffffff; stroke-width: 2; }
     .map__route-casing { stroke: #ffffff; stroke-linecap: round; stroke-linejoin: round; }
     .map__route { stroke-linecap: round; stroke-linejoin: round; }
   </style>`
-const header = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns:xlink="http://www.w3.org/1999/xlink">${style}<rect width="${w}" height="${h}" fill="#eef1fb"/>`
-let body = svg.innerHTML
-body = body.replace(/ stroke="var\([^)]*\)"/g, ' stroke="#0b0e16"').replace(/ fill="var\([^)]*\)"/g, ' fill="#4b3aff"')
+const header = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns:xlink="http://www.w3.org/1999/xlink">${style}<rect width="${w}" height="${h}" fill="#f1f4fb"/>`
+// The ground layer first, then the route: the order the app paints them.  The
+// map's own colour tokens are left alone -- the rasteriser reads them out of
+// the stylesheet -- but the few UI tokens used inline are resolved here.
+let body = `${base ? base.innerHTML : ''}${svg.innerHTML}`
+const INLINE_TOKENS = {
+  'var(--accent)': '#4b3aff',
+  'var(--ink)': '#0b0e16',
+  'var(--ink-2)': '#202534',
+  'var(--muted)': '#6b7280',
+  'var(--line)': '#e8eaf0',
+}
+for (const [token, value] of Object.entries(INLINE_TOKENS)) {
+  body = body.split(token).join(value)
+}
 mkdirSync(dirname(out), { recursive: true })
 writeFileSync(out, `${header}${body}</svg>`)
 console.log('wrote', out, `${w}x${h}`, 'cards:', cards.length)

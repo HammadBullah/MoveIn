@@ -21,6 +21,33 @@ function check(name, condition, detail = '') {
   checks.push(`${ok ? 'ok  ' : 'FAIL'} ${name}${ok || !detail ? '' : ` — ${detail}`}`)
 }
 
+/** The bounding box of an `M/L/Q` path, since jsdom has no getBBox. */
+function pathBounds(d) {
+  const numbers = (d.match(/-?\d+(?:\.\d+)?/g) || []).map(Number)
+  if (numbers.length < 2) return null
+  const xs = []
+  const ys = []
+  for (let i = 0; i + 1 < numbers.length; i += 2) {
+    xs.push(numbers[i])
+    ys.push(numbers[i + 1])
+  }
+  if (!xs.length) return null
+  const left = Math.min(...xs)
+  const right = Math.max(...xs)
+  const top = Math.min(...ys)
+  const bottom = Math.max(...ys)
+  return { left, top, right, bottom, width: right - left, height: bottom - top }
+}
+
+function unionBounds(boxes) {
+  if (!boxes.length) return null
+  const left = Math.min(...boxes.map((b) => b.left))
+  const right = Math.max(...boxes.map((b) => b.right))
+  const top = Math.min(...boxes.map((b) => b.top))
+  const bottom = Math.max(...boxes.map((b) => b.bottom))
+  return { left, top, right, bottom, width: right - left, height: bottom - top }
+}
+
 async function main() {
   const { JSDOM } = await import('jsdom')
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
@@ -50,6 +77,35 @@ async function main() {
       })
     }
   }
+  // jsdom has no layout: every element reports a size of zero.  The map sizes
+  // itself from its container, so a zero-sized frame is not a smaller version
+  // of the real thing -- it is a different code path.  Report the frame a phone
+  // would give it, which is what makes the map's own bugs visible here.
+  const FRAME = { width: 393, height: 852 }
+  const frameFor = (node) => {
+    const classes = node.classList || { contains: () => false }
+    const mapish =
+      classes.contains('map') || classes.contains('results__map') || classes.contains('viewport')
+    if (!mapish) return null
+    // An inline pixel height wins, exactly as it does in a browser -- which is
+    // what makes a map that sizes itself from its own measurement fail here.
+    const inline = node.style?.height || ''
+    const pixels = /^(\d+(?:\.\d+)?)px$/.exec(inline)
+    if (pixels) return { width: FRAME.width, height: Number(pixels[1]) }
+    return FRAME
+  }
+  for (const prop of ['clientWidth', 'clientHeight']) {
+    const original = Object.getOwnPropertyDescriptor(window.Element.prototype, prop)
+    Object.defineProperty(window.Element.prototype, prop, {
+      configurable: true,
+      get() {
+        const frame = frameFor(this)
+        if (frame) return prop === 'clientWidth' ? frame.width : frame.height
+        return original?.get?.call(this) ?? 0
+      },
+    })
+  }
+
   globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0)
   globalThis.cancelAnimationFrame = (id) => clearTimeout(id)
   window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
@@ -132,6 +188,47 @@ async function main() {
     `${container.querySelectorAll('.map__stop').length} intermediate stops drawn`,
   )
   check('the map states its scale', Boolean(container.querySelector('.map__scale-text')?.textContent))
+  check(
+    'the map has a ground layer to draw on',
+    Boolean(container.querySelector('.map__base rect')),
+  )
+  check(
+    'the map does not size itself from its own measurement',
+    (container.querySelector('.map')?.getAttribute('style') || '') === '',
+    `inline style: ${container.querySelector('.map')?.getAttribute('style')}`,
+  )
+
+  // The map has to occupy the frame it was given, and the route has to be drawn
+  // where a person can see it -- above the sheet, not behind it.
+  const mapSvg = container.querySelector('svg.map__canvas')
+  const viewBox = (mapSvg?.getAttribute('viewBox') || '').split(/\s+/).map(Number)
+  check(
+    'the map fills its container rather than a fixed strip',
+    viewBox[3] >= FRAME.height * 0.9,
+    `viewBox height ${viewBox[3]} of a ${FRAME.height}px frame (height="fill" must come from CSS)`,
+  )
+  // jsdom does not implement getBBox, so read the points out of the paths.  The
+  // first path is the walk to the stop, which is a few metres of the map: what
+  // matters is the whole route, so take the union.
+  const routeBox = unionBounds(
+    paths.map((path) => pathBounds(path.getAttribute('d') || '')).filter(Boolean),
+  )
+  const drawn = routeBox ?? { top: NaN, bottom: NaN, width: NaN, height: NaN }
+  check(
+    'the route is drawn above the sheet',
+    drawn.bottom <= viewBox[3] * 0.45,
+    `route spans y ${Math.round(drawn.top)}–${Math.round(drawn.bottom)} in a ${viewBox[3]}px map`,
+  )
+  check(
+    'the route is not squeezed into a sliver',
+    drawn.height > viewBox[3] * 0.1,
+    `route height ${Math.round(drawn.height)} of ${viewBox[3]}`,
+  )
+  check(
+    'the route uses the width it is given',
+    Boolean(routeBox) && routeBox.width > viewBox[2] * 0.25,
+    routeBox ? `route width ${Math.round(routeBox.width)} of ${viewBox[2]}` : 'no bbox',
+  )
   check(
     'the map is framed with real coordinates',
     container.querySelectorAll('.map__graticule line').length >= 2,
