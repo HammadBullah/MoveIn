@@ -1,17 +1,7 @@
 /** Shapes returned by the MoveIn API. */
 
 export type Mode =
-  | 'walk'
-  | 'cycle'
-  | 'bus'
-  | 'coach'
-  | 'rail'
-  | 'tram'
-  | 'metro'
-  | 'ferry'
-  | 'taxi'
-  | 'ridehail'
-  | 'air'
+  'walk' | 'cycle' | 'bus' | 'coach' | 'rail' | 'tram' | 'metro' | 'ferry' | 'taxi' | 'ridehail' | 'air'
 
 export interface Place {
   id: string
@@ -106,7 +96,12 @@ export interface Leg {
   distance_km?: number
   stops_count?: number
   /** Every stop the vehicle calls at, with the real coordinates to draw them. */
-  intermediate_stops?: { id: string; name: string; lat?: number; lon?: number }[]
+  intermediate_stops?: {
+    id: string
+    name: string
+    lat?: number
+    lon?: number
+  }[]
   fare?: string
   fare_amount?: number
   co2_g?: number
@@ -373,4 +368,110 @@ export interface TrackResponse {
     status: string
   }[]
   advice: string
+}
+
+/** The real published bus network: operator routes, their stops, their shapes. */
+export interface RealBusStop {
+  atco: string
+  name: string
+  lat: number
+  lon: number
+}
+
+export interface RealBusRouteSummary {
+  id: string
+  service: string
+  number: string
+  operator: string
+  description: string
+  stop_count: number
+  from: string
+  to: string
+  source: string
+}
+
+export interface RealBusRouteDetail extends RealBusRouteSummary {
+  stops: RealBusStop[]
+  shape: [number, number][]
+  shape_points: number
+  has_times: boolean
+  attribution: string
+}
+
+export interface RealBusCoverage {
+  routes: number
+  services: number
+  operators: number
+  operator_names: string[]
+  routes_per_operator: Record<string, number>
+  services_per_operator: Record<string, number>
+  named_stops: number
+  stop_calls: number
+  shape_points: number
+  attribution: string
+  has_times: boolean
+  note: string
+  coverage_note: string
+}
+
+export interface RealBusRouteList {
+  count: number
+  offset: number
+  limit: number
+  routes: RealBusRouteSummary[]
+  has_times: boolean
+  attribution: string
+}
+
+export interface RealBusOperator {
+  name: string
+  routes: number
+  services: number
+}
+
+export interface RealBusMapFeature {
+  id: string
+  number: string
+  operator: string
+  description: string
+  coordinates: [number, number][]
+  stops: [number, number][]
+  stop_count: number
+}
+
+export interface RealBusMapResponse {
+  count: number
+  total_matching: number
+  truncated: boolean
+  features: RealBusMapFeature[]
+  mode: string
+  has_times: boolean
+  attribution: string
+}
+
+export interface RealBusOption {
+  route_id: string
+  service: string
+  number: string
+  operator: string
+  description: string
+  direction: 'forward' | 'reverse'
+  board: RealBusStop
+  alight: RealBusStop
+  stops_travelled: number
+  stops_before: number
+  stops_after: number
+  straight_m: number
+  calls_at: string[]
+}
+
+export interface RealBusBetween {
+  origin: { id: string; label: string; lat: number; lon: number }
+  destination: { id: string; label: string; lat: number; lon: number }
+  radius_m: number
+  count: number
+  options: RealBusOption[]
+  has_times: boolean
+  note: string
+  attribution: string
 }

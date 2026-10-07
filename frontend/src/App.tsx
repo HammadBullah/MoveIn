@@ -13,21 +13,14 @@ import { ProfileScreen } from './screens/ProfileScreen'
 import { PlacesScreen } from './screens/PlacesScreen'
 import { TripsScreen } from './screens/TripsScreen'
 import { DataScreen } from './screens/DataScreen'
+import { BusScreen } from './screens/BusScreen'
 import { api, ApiError } from './lib/api'
 import { loadProfile, rememberJourney, saveProfile, type Profile } from './lib/storage'
 import type { Journey, SearchResponse } from './lib/types'
 
 type Tab = 'home' | 'trips' | 'alerts' | 'profile'
 type View =
-  | 'home'
-  | 'results'
-  | 'detail'
-  | 'live'
-  | 'compare'
-  | 'mode'
-  | 'places'
-  | 'profile'
-  | 'data'
+  'home' | 'results' | 'detail' | 'live' | 'compare' | 'mode' | 'places' | 'profile' | 'data' | 'bus'
 
 const TABS: { id: Tab; label: string; icon: string; view: View }[] = [
   { id: 'home', label: 'Home', icon: 'home', view: 'home' },
@@ -53,7 +46,18 @@ function parseHash(): { view: View; tab: Tab; params: URLSearchParams } {
   if (path === 'trips' || path === 'alerts' || path === 'profile') {
     return { view: 'home', tab: path as Tab, params }
   }
-  const known: View[] = ['home', 'results', 'detail', 'live', 'compare', 'mode', 'places', 'profile', 'data']
+  const known: View[] = [
+    'home',
+    'results',
+    'detail',
+    'live',
+    'compare',
+    'mode',
+    'places',
+    'profile',
+    'data',
+    'bus',
+  ]
   const view = (known.includes(path as View) ? path : 'home') as View
   return { view, tab: 'home', params }
 }
@@ -94,7 +98,15 @@ export default function App() {
   }, [])
 
   const runSearch = useCallback(
-    async (input: HomeValue, extra?: { filters?: Filters; arriveBy?: string | null; maxPrice?: number | null; maxChanges?: number }) => {
+    async (
+      input: HomeValue,
+      extra?: {
+        filters?: Filters
+        arriveBy?: string | null
+        maxPrice?: number | null
+        maxChanges?: number
+      },
+    ) => {
       const active = extra?.filters ?? filters
       const modes = active.modes.length && active.modes.length < 10 ? active.modes : undefined
       setLoading(true)
@@ -122,9 +134,7 @@ export default function App() {
         window.dispatchEvent(new Event('movein:recents'))
       } catch (cause) {
         setResult(null)
-        setError(
-          cause instanceof ApiError ? cause.message : 'Something went wrong planning that journey.',
-        )
+        setError(cause instanceof ApiError ? cause.message : 'Something went wrong planning that journey.')
       } finally {
         setLoading(false)
       }
@@ -318,7 +328,17 @@ export default function App() {
     }
 
     if (view === 'data') {
-      return <DataScreen onBack={() => navigate('profile')} />
+      return <DataScreen onBack={() => navigate('profile')} onOpenBus={() => navigate('bus')} />
+    }
+
+    if (view === 'bus') {
+      return (
+        <BusScreen
+          onBack={() => navigate('data')}
+          from={query.originLabel || undefined}
+          to={query.destinationLabel || undefined}
+        />
+      )
     }
 
     if (tab === 'trips') {
@@ -334,7 +354,13 @@ export default function App() {
               destinationLabel: to,
             }))
             if (from && to) {
-              const next = { ...query, origin: from, originLabel: from, destination: to, destinationLabel: to }
+              const next = {
+                ...query,
+                origin: from,
+                originLabel: from,
+                destination: to,
+                destinationLabel: to,
+              }
               void runSearch(next)
             } else {
               goTab('home')
@@ -380,7 +406,9 @@ export default function App() {
     <div className="app">
       <div className="phone">
         <main className={`viewport viewport--${view}`} key={`${view}-${params.toString()}`}>
-          <ErrorBoundary key={view} label={view}>{body()}</ErrorBoundary>
+          <ErrorBoundary key={view} label={view}>
+            {body()}
+          </ErrorBoundary>
         </main>
 
         {chrome && (
@@ -409,7 +437,10 @@ export default function App() {
           onApply={(next) => {
             setFilters(next)
             setFilterOpen(false)
-            const updated = { ...query, preference: next.preferences[0] ?? query.preference }
+            const updated = {
+              ...query,
+              preference: next.preferences[0] ?? query.preference,
+            }
             setQuery(updated)
             void runSearch(updated, { filters: next })
           }}

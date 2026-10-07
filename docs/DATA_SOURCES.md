@@ -58,6 +58,53 @@ are being shown. It is deliberately not buried in a repository.
 * **Used for:** operator names, codes, brand colours and websites, so the app
   names CrossCountry rather than `XC`.
 
+### 3b. Operator bus routes — the real published network
+
+**What it is.** Real bus routes as their operators publish them: route number,
+operator, the ordered stops the service calls at, and the shape the vehicle
+drives. **514 route variations of 144 services from 5 operators** — Stagecoach
+Midlands, Stagecoach Oxfordshire, Arriva Beds & Bucks, Arriva Herts & Essex,
+Red Rose Travel and Redline — covering 694 named stops and 57,935 shape points.
+
+**Where it comes from.** The operators' own TransXChange publications on the
+DfT **Bus Open Data Service**, mirrored as GeoJSON by
+[`ukinteractivebusmap/ukinteractivebusmap.github.io`](https://github.com/ukinteractivebusmap/ukinteractivebusmap.github.io);
+each feature's `source_file` names the BODS XML it was traced from. Stops are
+matched against the committed NaPTAN register by coordinate (40 m radius, 45 m
+dedupe, grid-indexed), and shapes are simplified with Ramer–Douglas–Peucker at
+12 m — invisible at any zoom a phone uses.
+
+**What it is not.** It carries **no departure times**, and every API payload in
+`/api/bus/*` says `"has_times": false` and why. It is also a **slice, not the
+country**: 5 operators of roughly 1,700, and only the routes whose stops come
+near MoveIn's NaPTAN extract.
+
+**How to grow it.** The Bus Open Data Service's dataset API reports **936
+published datasets** (each a zip of TransXChange XML and GTFS). Run:
+
+```bash
+export MOVEIN_BODS_API_KEY=...                      # free from data.bus-data.dft.gov.uk
+.venv/bin/python scripts/fetch_bods_gtfs.py --list  # 936 datasets, filterable
+.venv/bin/python scripts/fetch_bods_gtfs.py --area Nottingham --noc NCTR
+.venv/bin/python scripts/import_gtfs_routes.py      # -> compiled_bods.json.gz
+```
+
+The loader merges every `compiled*.json.gz` in
+`backend/data/raw/real_bus_routes/`, so an import *adds* to the network. The
+compiler is tested on a five-stop fixture (`backend/tests/fixtures/gtfs_mini`)
+so the national path is proven logic, not a hopeful one.
+
+**Licence.** Open Government Licence v3.0 (Bus Open Data Service, Department for
+Transport), with NaPTAN for stop names and coordinates.
+
+### 3c. Town names — from the station register
+
+Place resolution uses the committed rail register (`towns.py`) to build a
+nationwide town gazetteer: 6,320 towns, with cities assembled from the centre of
+their own stations. This is why typing **Banbury** plans from Banbury rather than
+from a street called Banbury Road in Coventry — the failure that produced a
+wrong "no buses between Oxford and Banbury" answer until it was fixed.
+
 ## Compiled dataset — stated plainly
 
 ### 4. The timetable layer
@@ -162,6 +209,26 @@ stop coordinates, served by `GET /api/network/map` — real NaPTAN stops between
 real places, at their published coordinates. Nothing about the shape of a route
 is invented to make the map look better.
 
+## The one that matters most: the national bus dataset
+
+BODS holds the country's bus data, and **this environment cannot reach it**.
+That is a property of the sandbox, not of the key: `curl -v` connects to
+`data.bus-data.dft.gov.uk:443` and the TLS handshake is dropped
+(`SSL_ERROR_SYSCALL`), which is what a network allowlist looks like from the
+inside. The same request made through a web-fetch tool with the project's API key
+returns the dataset list happily — so the credential is valid and the wall is the
+network.
+
+Consequences, stated here so nobody has to rediscover them:
+
+* The national ingest **cannot run in this environment**, and no script pretends
+  otherwise: `fetch_bods_gtfs.py` prints a paragraph explaining exactly this
+  instead of raising a stack trace.
+* What the app ships is the slice in §3b: real, traceable, and honestly labelled.
+* Everything needed for the national run is committed — the fetch, the compiler,
+  the merging loader, the key handling (`.env`, gitignored; `.env.example`
+  documents the variable) and the tests.
+
 ## Datasets MoveIn could not fetch, and what it did instead
 
 Each of these is unreachable from this environment. Rather than pretend, MoveIn
@@ -181,9 +248,15 @@ source is configuration rather than development.
 ## Reproducing the data
 
 ```bash
-.venv/bin/python scripts/fetch_real_data.py     # re-download the real sources
-.venv/bin/python scripts/seed_db.py --rebuild   # recompile and reload
-.venv/bin/python scripts/seed_db.py --status    # what is loaded
+.venv/bin/python scripts/fetch_real_data.py         # re-download the real sources
+.venv/bin/python scripts/fetch_real_bus_routes.py   # the operator route geometry (47 MB)
+.venv/bin/python scripts/import_real_bus_routes.py  # compile it (0.2 MB, committed)
+.venv/bin/python scripts/seed_db.py --rebuild       # recompile and reload
+.venv/bin/python scripts/seed_db.py --status        # what is loaded
+
+# With a network and a BODS key, the national bus dataset (see above):
+.venv/bin/python scripts/fetch_bods_gtfs.py --area Nottingham
+.venv/bin/python scripts/import_gtfs_routes.py
 ```
 
 `backend/data/raw/SOURCES.json` records the row counts, the fetch timestamp and

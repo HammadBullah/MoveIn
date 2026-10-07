@@ -24,6 +24,7 @@ from ..db.models import (
     VehiclePositionRow,
 )
 from ..domain.models import CO2_G_PER_PKM, Mode, to_uk_naive, uk_now
+from ..domain.real_bus import get_real_bus_network
 from ..domain.regions import REGIONS, region_for_point
 from ..engine.fares import TravellerProfile
 from ..engine.journeys import Preference
@@ -123,13 +124,7 @@ def data_sources(db: DbDep, planner: PlannerDep) -> dict:
     rows = list(
         db.execute(select(DataSourceRow).order_by(DataSourceRow.kind, DataSourceRow.key)).scalars()
     )
-    return {
-        "headline": (
-            "Real GB stop, station and operator data. The timetable layer is "
-            "compiled from it, not downloaded — live national feeds are not "
-            "reachable from this deployment."
-        ),
-        "sources": [
+    sources = [
             {
                 "key": row.key,
                 "name": row.name,
@@ -140,7 +135,40 @@ def data_sources(db: DbDep, planner: PlannerDep) -> dict:
                 "detail": row.detail,
             }
             for row in rows
-        ],
+    ]
+
+    # The real bus network is not in the database -- it is a compiled file the
+    # API loads directly -- so it is added here rather than being invisible on
+    # the screen that exists to make provenance visible.
+    real_bus = get_real_bus_network()
+    if real_bus is not None and real_bus.routes:
+        stats = real_bus.stats()
+        sources.insert(
+            0,
+            {
+                "key": "real-bus-routes",
+                "name": "Operator bus routes (real, published)",
+                "url": "https://data.bus-data.dft.gov.uk/",
+                "licence": "Open Government Licence v3.0 (DfT Bus Open Data Service)",
+                "kind": "real",
+                "rows": stats["routes"],
+                "detail": (
+                    f"{stats['routes']} real route variations of {stats['services']} "
+                    f"services from {stats['operators']} operators, "
+                    f"{stats['named_stops']:,} named stops. No departure times: "
+                    "route shapes, not timetables."
+                ),
+            },
+        )
+
+    return {
+        "headline": (
+            "Real GB stop, station and operator data, including the bus routes "
+            "operators publish. The timetable layer is compiled from it, not "
+            "downloaded — live national feeds are not reachable from this "
+            "deployment."
+        ),
+        "sources": sources,
         "live_feeds": [
             {
                 "key": key,

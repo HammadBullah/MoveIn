@@ -1,0 +1,6 @@
+stop_id,stop_name,stop_lat,stop_lon
+S1,Alpha Street,52.4000,-1.5000
+S2,Beta Road,52.4100,-1.4800
+S3,Gamma Lane,52.4200,-1.4600
+S4,Delta Close,52.4300,-1.4400
+S5,Unused Stop,52.9000,-1.9000

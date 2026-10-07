@@ -21,6 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from .api.bus import bus
 from .api.routes import fares, journeys, live, meta, network, stops, user
 from .config import BACKEND_ROOT, REPO_ROOT, get_settings
 from .engine.service import get_planner
@@ -79,6 +80,7 @@ app.include_router(meta, prefix=api_prefix)
 app.include_router(stops, prefix=api_prefix)
 app.include_router(journeys, prefix=api_prefix)
 app.include_router(network, prefix=api_prefix)
+app.include_router(bus, prefix=api_prefix)
 app.include_router(fares, prefix=api_prefix)
 app.include_router(live, prefix=api_prefix)
 app.include_router(user, prefix=api_prefix)

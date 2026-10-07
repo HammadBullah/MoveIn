@@ -1198,6 +1198,11 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 /* What is drawn on it. */
+.map__layer-toggle--bus {
+  /* The published network sits under the modelled one, and reads as context. */
+  color: var(--ink-2);
+}
+
 .map__layer-toggle {
   position: absolute;
   z-index: 6;
@@ -3061,4 +3066,224 @@ input[type='range']::-webkit-slider-thumb {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+/* ------------------------------------------------------------------ *
+ * The real bus network
+ *
+ * A screen about published data, not a booking flow: dense where the
+ * information is (route number, operator, the two ends of the line) and
+ * quiet everywhere else.
+ * ------------------------------------------------------------------ */
+
+.screen--bus {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 28px;
+}
+
+.bus__banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+}
+
+.bus__banner strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.01em;
+}
+
+.bus__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bus__count {
+  margin: 0 2px;
+}
+
+.bus__list,
+.bus__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bus__row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
+}
+
+.bus__row:hover {
+  border-color: var(--accent-line);
+}
+
+.bus__row--on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bus__row .icon {
+  color: var(--muted-2);
+  transform: rotate(180deg);
+}
+
+.bus__number {
+  min-width: 52px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 650;
+  font-size: 0.86rem;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+.bus__number--lg {
+  min-width: 62px;
+  padding: 8px 10px;
+  font-size: 1rem;
+}
+
+.bus__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.bus__body strong {
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bus__body em {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-style: normal;
+  color: var(--ink-2);
+  font-size: 0.84rem;
+}
+
+.bus__body .muted {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bus__option-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.bus__stops {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.bus__option .row + .row {
+  margin-top: 6px;
+}
+
+.bus__detail {
+  overflow: hidden;
+  padding: 0;
+}
+
+.bus__stops-list {
+  list-style: none;
+  margin: 10px 0 8px;
+  padding: 0 0 0 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  border-left: 2px solid var(--line);
+}
+
+.bus__stops-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 4px 10px;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+.bus__stop-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: -15px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--accent);
+}
+
+.bus__attribution {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+/* Numbers on the data screen: the figures people came for. */
+.data__figures {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.data__figures span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.data__figures strong {
+  font-size: 1.24rem;
+  letter-spacing: -0.02em;
+}
+
+.data__figures em {
+  font-style: normal;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-2);
+}
+
+/* The published network under a journey: thinner and greyer than the
+   modelled network, because it is context, not the answer. */
+.map__realbus {
+  opacity: 0.5;
+}
+
+.map__realbus--one {
+  opacity: 0.9;
 }

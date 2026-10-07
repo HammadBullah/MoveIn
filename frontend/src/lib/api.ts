@@ -7,6 +7,12 @@ import type {
   NetworkSummary,
   Place,
   Preference,
+  RealBusBetween,
+  RealBusCoverage,
+  RealBusMapResponse,
+  RealBusOperator,
+  RealBusRouteDetail,
+  RealBusRouteList,
   PriceAlert,
   SavedJourney,
   SearchHistoryEntry,
@@ -39,10 +45,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
     })
   } catch (cause) {
-    throw new ApiError(
-      'Could not reach the MoveIn API. Is the backend running on port 8000?',
-      0,
-    )
+    throw new ApiError('Could not reach the MoveIn API. Is the backend running on port 8000?', 0)
   }
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`
@@ -85,8 +88,7 @@ function withDevice(init?: RequestInit): RequestInit {
 export const api = {
   health: () => request<Record<string, unknown>>('/health'),
 
-  preferences: () =>
-    request<{ default: string; preferences: Preference[] }>('/preferences'),
+  preferences: () => request<{ default: string; preferences: Preference[] }>('/preferences'),
 
   dataSources: () => request<DataSourcesResponse>('/data-sources'),
 
@@ -131,12 +133,72 @@ export const api = {
   networkMap: (mode?: string) =>
     request<NetworkMapResponse>(`/network/map${mode ? `?mode=${encodeURIComponent(mode)}` : ''}`),
 
+  // --- the real published bus network ------------------------------------
+  realBusCoverage: () => request<RealBusCoverage>('/bus/coverage'),
+
+  realBusOperators: () =>
+    request<{
+      count: number
+      operators: RealBusOperator[]
+      attribution: string
+    }>('/bus/operators'),
+
+  realBusRoutes: (
+    params: {
+      operator?: string
+      q?: string
+      limit?: number
+      offset?: number
+    } = {},
+  ) => {
+    const query = new URLSearchParams()
+    if (params.operator) query.set('operator', params.operator)
+    if (params.q) query.set('q', params.q)
+    query.set('limit', String(params.limit ?? 60))
+    if (params.offset) query.set('offset', String(params.offset))
+    return request<RealBusRouteList>(`/bus/routes?${query.toString()}`)
+  },
+
+  realBusRoute: (id: string) => request<RealBusRouteDetail>(`/bus/routes/${encodeURIComponent(id)}`),
+
+  realBusMap: (
+    params: {
+      operator?: string
+      lat?: number
+      lon?: number
+      radius_m?: number
+      simplify_m?: number
+    } = {},
+  ) => {
+    const query = new URLSearchParams()
+    if (params.operator) query.set('operator', params.operator)
+    if (params.lat !== undefined && params.lon !== undefined) {
+      query.set('lat', String(params.lat))
+      query.set('lon', String(params.lon))
+    }
+    if (params.radius_m) query.set('radius_m', String(params.radius_m))
+    if (params.simplify_m) query.set('simplify_m', String(params.simplify_m))
+    const suffix = query.toString()
+    return request<RealBusMapResponse>(`/bus/map${suffix ? `?${suffix}` : ''}`)
+  },
+
+  realBusBetween: (origin: string, destination: string) => {
+    const query = new URLSearchParams({ origin, destination })
+    return request<RealBusBetween>(`/bus/between?${query.toString()}`)
+  },
+
   compareEmissions: (origin: string, destination: string) =>
     request<{
       distance_km: number
       origin: Place
       destination: Place
-      modes: { mode: string; mode_label: string; g_per_km: number; co2_g: number; co2_label: string }[]
+      modes: {
+        mode: string
+        mode_label: string
+        g_per_km: number
+        co2_g: number
+        co2_label: string
+      }[]
       greenest: string
       note: string
     }>('/journeys/compare-emissions', {
@@ -153,9 +215,7 @@ export const api = {
       note: string
       count: number
       vehicles: LiveVehicle[]
-    }>(
-      `/live/vehicles?limit=${limit}${routeId ? `&route_id=${encodeURIComponent(routeId)}` : ''}`,
-    ),
+    }>(`/live/vehicles?limit=${limit}${routeId ? `&route_id=${encodeURIComponent(routeId)}` : ''}`),
 
   liveAlerts: (region?: string) =>
     request<{ count: number; source: string; alerts: LiveAlert[] }>(
@@ -165,7 +225,10 @@ export const api = {
   track: (body: { journey_id: string; payload: unknown; preference: string }) =>
     request<TrackResponse>(
       '/live/track',
-      withDevice({ method: 'POST', body: JSON.stringify({ ...body, device_key: deviceKey() }) }),
+      withDevice({
+        method: 'POST',
+        body: JSON.stringify({ ...body, device_key: deviceKey() }),
+      }),
     ),
 
   // --- saved journeys and alerts ------------------------------------------
@@ -175,23 +238,27 @@ export const api = {
   save: (body: { origin: string; destination: string; preference: string; label?: string }) =>
     request<{ id: number; label: string }>(
       '/me/saved',
-      withDevice({ method: 'POST', body: JSON.stringify({ ...body, device_key: deviceKey() }) }),
+      withDevice({
+        method: 'POST',
+        body: JSON.stringify({ ...body, device_key: deviceKey() }),
+      }),
     ),
 
-  unsave: (id: number) =>
-    request<{ deleted: boolean }>(`/me/saved/${id}`, withDevice({ method: 'DELETE' })),
+  unsave: (id: number) => request<{ deleted: boolean }>(`/me/saved/${id}`, withDevice({ method: 'DELETE' })),
 
   alerts: () => request<{ count: number; alerts: PriceAlert[] }>('/me/alerts', withDevice()),
 
-  watch: (body: {
-    origin: string
-    destination: string
-    preference: string
-    target_price?: number | null
-  }) =>
-    request<{ id: number; watching: string; current_best_price: number | null }>(
+  watch: (body: { origin: string; destination: string; preference: string; target_price?: number | null }) =>
+    request<{
+      id: number
+      watching: string
+      current_best_price: number | null
+    }>(
       '/me/alerts',
-      withDevice({ method: 'POST', body: JSON.stringify({ ...body, device_key: deviceKey() }) }),
+      withDevice({
+        method: 'POST',
+        body: JSON.stringify({ ...body, device_key: deviceKey() }),
+      }),
     ),
 
   unwatch: (id: number) =>
@@ -213,8 +280,5 @@ export const api = {
     }>('/me/alerts/check', withDevice()),
 
   history: (limit = 20) =>
-    request<{ count: number; history: SearchHistoryEntry[] }>(
-      `/me/history?limit=${limit}`,
-      withDevice(),
-    ),
+    request<{ count: number; history: SearchHistoryEntry[] }>(`/me/history?limit=${limit}`, withDevice()),
 }

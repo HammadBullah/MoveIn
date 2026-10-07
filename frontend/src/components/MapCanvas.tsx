@@ -2,7 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { api } from '../lib/api'
-import { BASEMAPS, basemap as resolveBasemap, attributionFor, DEFAULT_BASEMAP, type BasemapId } from '../lib/basemaps'
+import {
+  BASEMAPS,
+  basemap as resolveBasemap,
+  attributionFor,
+  DEFAULT_BASEMAP,
+  type BasemapId,
+} from '../lib/basemaps'
 import { modeColour, modeLabel } from '../lib/format'
 import type { Journey, Leg, NetworkMapFeature } from '../lib/types'
 import { Icon } from './Icons'
@@ -38,6 +44,10 @@ export function MapCanvas({
   reserveBottom = 0,
   /** Show every route in the modelled network underneath the journey. */
   showNetwork = true,
+  /** Show the real published bus routes underneath the journey. */
+  showRealBus = false,
+  /** Draw one published bus route on its own: its shape and its stops. */
+  realBusRoute = null,
 }: {
   journey: Journey | null
   height?: number | 'fill'
@@ -45,18 +55,28 @@ export function MapCanvas({
   live?: boolean
   reserveBottom?: number
   showNetwork?: boolean
+  showRealBus?: boolean
+  realBusRoute?: {
+    shape: [number, number][]
+    stops: [number, number][]
+    label: string
+  } | null
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const baseRef = useRef<L.TileLayer | null>(null)
   const journeyRef = useRef<L.LayerGroup | null>(null)
   const networkRef = useRef<L.LayerGroup | null>(null)
+  const realBusRef = useRef<L.LayerGroup | null>(null)
+  const realRouteRef = useRef<L.LayerGroup | null>(null)
   const failCount = useRef(0)
 
   const [style, setStyle] = useState<BasemapId>(DEFAULT_BASEMAP)
   const [zoom, setZoom] = useState(6)
   const [networkOn, setNetworkOn] = useState(showNetwork)
   const [networkCount, setNetworkCount] = useState<number | null>(null)
+  const [realBusOn, setRealBusOn] = useState(showRealBus)
+  const [realBusCount, setRealBusCount] = useState<number | null>(null)
   const [tilesDown, setTilesDown] = useState(false)
   const [scale, setScale] = useState<{ px: number; label: string } | null>(null)
 
@@ -89,6 +109,8 @@ export function MapCanvas({
 
     journeyRef.current = L.layerGroup().addTo(map)
     networkRef.current = L.layerGroup().addTo(map)
+    realBusRef.current = L.layerGroup().addTo(map)
+    realRouteRef.current = L.layerGroup().addTo(map)
 
     const sync = () => {
       setZoom(map.getZoom())
@@ -104,6 +126,8 @@ export function MapCanvas({
       baseRef.current = null
       journeyRef.current = null
       networkRef.current = null
+      realBusRef.current = null
+      realRouteRef.current = null
     }
   }, [interactive])
 
@@ -212,7 +236,10 @@ export function MapCanvas({
     const last = segments[segments.length - 1]
     const ends: [string, [number, number] | undefined][] = [
       [journey?.legs[0]?.from.name ?? 'Start', first?.points[0]],
-      [journey?.legs[journey.legs.length - 1]?.to.name ?? 'Destination', last?.points[last.points.length - 1]],
+      [
+        journey?.legs[journey.legs.length - 1]?.to.name ?? 'Destination',
+        last?.points[last.points.length - 1],
+      ],
     ]
     for (const [name, point] of ends) {
       if (!name || !point) continue
@@ -292,6 +319,77 @@ export function MapCanvas({
     }
   }, [networkOn])
 
+  // --- the real published bus network --------------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    const group = realBusRef.current
+    if (!map || !group) return
+    group.clearLayers()
+    if (!realBusOn) return
+
+    let cancelled = false
+    const pane = map.getPane('network') ? 'network' : map.createPane('network') && 'network'
+
+    runWhenIdle(() => {
+      // A national payload: trim hard, because at this zoom the difference
+      // between a road and a straight line is a few pixels.
+      api
+        .realBusMap({ simplify_m: 120 })
+        .then((response) => {
+          if (cancelled) return
+          setRealBusCount(response.total_matching || response.count)
+          for (const feature of response.features) {
+            L.polyline(feature.coordinates as [number, number][], {
+              pane,
+              color: '#475569',
+              weight: 1.1,
+              opacity: 0.5,
+              lineCap: 'round',
+              className: 'map__realbus',
+              interactive: false,
+            }).addTo(group)
+          }
+        })
+        .catch(() => setRealBusCount(null))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [realBusOn])
+
+  // --- one published route, drawn properly ---------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    const group = realRouteRef.current
+    if (!map || !group || !realBusRoute) return
+    group.clearLayers()
+    const pane = map.getPane('network') ? 'network' : map.createPane('network') && 'network'
+    L.polyline(realBusRoute.shape, {
+      pane,
+      color: '#0f766e',
+      weight: 3.4,
+      opacity: 0.9,
+      lineCap: 'round',
+      className: 'map__realbus map__realbus--one',
+      interactive: false,
+    }).addTo(group)
+    for (const stop of realBusRoute.stops) {
+      L.circleMarker(stop, {
+        pane,
+        radius: 3,
+        color: '#0f766e',
+        weight: 1.5,
+        fillColor: '#ffffff',
+        fillOpacity: 1,
+        interactive: false,
+      }).addTo(group)
+    }
+    fitRoute(map, wrapRef.current, realBusRoute.shape, reserveBottom, false)
+    setZoom(map.getZoom())
+    setScale(scaleFor(map))
+  }, [realBusRoute, reserveBottom])
+
   const bottomOffset = `calc(${(reserveBottom * 100).toFixed(1)}% + 12px)`
   const frameStyle = height === 'fill' ? undefined : { height: `${height}px` }
 
@@ -312,7 +410,6 @@ export function MapCanvas({
         </div>
       )}
 
-
       {interactive && (
         <>
           {/* How the world looks, and what is drawn on it. */}
@@ -327,7 +424,10 @@ export function MapCanvas({
                 title={`${entry.label} map`}
                 onClick={() => setStyle(entry.id)}
               >
-                <Icon name={entry.id === 'satellite' ? 'globe' : entry.id === 'terrain' ? 'layers' : 'map'} size={15} />
+                <Icon
+                  name={entry.id === 'satellite' ? 'globe' : entry.id === 'terrain' ? 'layers' : 'map'}
+                  size={15}
+                />
                 <span>{entry.short}</span>
               </button>
             ))}
@@ -367,19 +467,36 @@ export function MapCanvas({
 
           <button
             type="button"
-            className={`map__layer-toggle${networkOn ? ' map__layer-toggle--on' : ''}`}
+            className={`map__layer-toggle map__layer-toggle--bus${realBusOn ? ' map__layer-toggle--on' : ''}`}
+            aria-pressed={realBusOn}
+            style={{
+              bottom: `calc(${(reserveBottom * 100).toFixed(1)}% + 92px)`,
+            }}
+            onClick={() => setRealBusOn((on) => !on)}
+          >
+            <Icon name="bus" size={15} />
+            <span>
+              {realBusOn
+                ? realBusCount
+                  ? `${realBusCount} real bus routes`
+                  : 'Real bus routes'
+                : 'Published buses'}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className={`map__layer-toggle map__layer-toggle--network${networkOn ? ' map__layer-toggle--on' : ''}`}
             aria-pressed={networkOn}
             // Above the attribution and scale, which sit at the very bottom.
-            style={{ bottom: `calc(${(reserveBottom * 100).toFixed(1)}% + 54px)` }}
+            style={{
+              bottom: `calc(${(reserveBottom * 100).toFixed(1)}% + 54px)`,
+            }}
             onClick={() => setNetworkOn((on) => !on)}
           >
             <Icon name="layers" size={15} />
             <span>
-              {networkOn
-                ? networkCount
-                  ? `All ${networkCount} routes`
-                  : 'All routes'
-                : 'Journey only'}
+              {networkOn ? (networkCount ? `All ${networkCount} routes` : 'All routes') : 'Journey only'}
             </span>
           </button>
         </>
@@ -492,12 +609,14 @@ function runWhenIdle(task: () => void) {
 /** Metres per pixel at this zoom and latitude, in whole kilometres. */
 function scaleFor(map: L.Map): { px: number; label: string } {
   const centre = map.getCenter()
-  const metresPerPixel =
-    (156543.03392 * Math.cos((centre.lat * Math.PI) / 180)) / Math.pow(2, map.getZoom())
+  const metresPerPixel = (156543.03392 * Math.cos((centre.lat * Math.PI) / 180)) / Math.pow(2, map.getZoom())
   const options = [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500]
   const target = 78
   const km = options.find((value) => (value * 1000) / metresPerPixel >= target) ?? 500
-  return { px: Math.round((km * 1000) / metresPerPixel), label: km < 1 ? `${km * 1000} m` : `${km} km` }
+  return {
+    px: Math.round((km * 1000) / metresPerPixel),
+    label: km < 1 ? `${km * 1000} m` : `${km} km`,
+  }
 }
 
 function trimName(name: string): string {

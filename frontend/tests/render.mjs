@@ -234,11 +234,7 @@ async function main() {
     await click(zoomOut)
     await settle(150)
     const zoomedOut = Number(mapNode?.getAttribute('data-map-zoom') ?? 0)
-    check(
-      'zooming in makes the map closer',
-      zoomedIn > zoomBefore,
-      `${zoomBefore} -> ${zoomedIn}`,
-    )
+    check('zooming in makes the map closer', zoomedIn > zoomBefore, `${zoomBefore} -> ${zoomedIn}`)
     check('zooming out backs it off again', zoomedOut < zoomedIn, `${zoomedIn} -> ${zoomedOut}`)
   }
 
@@ -254,15 +250,13 @@ async function main() {
   check('there is a satellite option', Boolean(satellite))
   check('there is a terrain option', Boolean(terrain))
 
-  const tileHost = () =>
-    container.querySelector('.leaflet-tile-pane img')?.getAttribute('src') || ''
+  const tileHost = () => container.querySelector('.leaflet-tile-pane img')?.getAttribute('src') || ''
   if (satellite) {
     await click(satellite)
     await settle(200)
     check(
       'choosing satellite swaps in imagery',
-      tileHost().includes('arcgisonline') &&
-        mapNode?.getAttribute('data-map-basemap') === 'satellite',
+      tileHost().includes('arcgisonline') && mapNode?.getAttribute('data-map-basemap') === 'satellite',
       `${tileHost().slice(0, 70)} (basemap ${mapNode?.getAttribute('data-map-basemap')})`,
     )
     check(
@@ -274,11 +268,7 @@ async function main() {
   if (terrain) {
     await click(terrain)
     await settle(200)
-    check(
-      'choosing terrain swaps in relief',
-      tileHost().includes('opentopomap'),
-      tileHost().slice(0, 70),
-    )
+    check('choosing terrain swaps in relief', tileHost().includes('opentopomap'), tileHost().slice(0, 70))
     await click(styleButtons[0])
     await settle(150)
   }
@@ -290,8 +280,13 @@ async function main() {
     networkPaths.length >= 40,
     `${networkPaths.length} network lines (83 modelled routes)`,
   )
-  const layerToggle = container.querySelector('.map__layer-toggle')
+  const layerToggle = container.querySelector('.map__layer-toggle--network')
   check('the map offers the whole network as a layer', Boolean(layerToggle))
+  check(
+    'the map offers the published bus network as its own layer',
+    Boolean(container.querySelector('.map__layer-toggle--bus')),
+    container.querySelector('.map__layer-toggle--bus')?.textContent.trim(),
+  )
   if (layerToggle) {
     check(
       'the layer says how many routes it is showing',
@@ -344,8 +339,15 @@ async function main() {
   check('walking is stated on the card', /min walk|no walking/.test(text))
 
   const chips = Array.from(container.querySelectorAll('.chip')).map((c) => c.textContent.trim())
-  check('the four trade-off chips are offered', ['Recommended', 'Cheapest', 'Fastest'].every((label) => chips.some((c) => c.includes(label))), chips.join(' | '))
-  check('there is a filter entry point', chips.some((c) => c.includes('Filters') || c.includes('More')))
+  check(
+    'the four trade-off chips are offered',
+    ['Recommended', 'Cheapest', 'Fastest'].every((label) => chips.some((c) => c.includes(label))),
+    chips.join(' | '),
+  )
+  check(
+    'there is a filter entry point',
+    chips.some((c) => c.includes('Filters') || c.includes('More')),
+  )
   check(
     'cards wear their trade-off badge',
     /Best value|Cheapest|Fastest|Fewest changes|Least walking/.test(text),
@@ -355,8 +357,7 @@ async function main() {
   // with a click on most pointers -- which must not undo the drag.
   const grab = container.querySelector('.sheet__grab')
   if (grab) {
-    const pointer = (type, y) =>
-      new window.MouseEvent(type, { bubbles: true, clientY: y })
+    const pointer = (type, y) => new window.MouseEvent(type, { bubbles: true, clientY: y })
     await act(async () => {
       grab.dispatchEvent(pointer('pointerdown', 500))
       grab.dispatchEvent(pointer('pointermove', 380))
@@ -384,15 +385,10 @@ async function main() {
   }
 
   // The 15-minute promise: on the default limit there is nothing to warn about.
-  check(
-    'the default list is free of long walks',
-    container.querySelector('.jlist--longwalk') === null,
-  )
+  check('the default list is free of long walks', container.querySelector('.jlist--longwalk') === null)
   check(
     'no card in the default list warns about a long walk',
-    !Array.from(container.querySelectorAll('.jlist .jcard')).some((c) =>
-      c.textContent.includes('Long walk'),
-    ),
+    !Array.from(container.querySelectorAll('.jlist .jcard')).some((c) => c.textContent.includes('Long walk')),
   )
 
   // ---- journey detail ----------------------------------------------------
@@ -415,15 +411,14 @@ async function main() {
     )
     check(
       'a wait between stages is stated in minutes',
-      /\d+ min transfer/.test(container.textContent) || container.querySelectorAll('.timeline__stage').length === 1,
+      /\d+ min transfer/.test(container.textContent) ||
+        container.querySelectorAll('.timeline__stage').length === 1,
       'expected "N min transfer" where a journey changes vehicle',
     )
     check('the detail names the places', container.querySelectorAll('.timeline__place').length > 0)
     check(
       'the detail offers to start the journey',
-      Array.from(container.querySelectorAll('button')).some((b) =>
-        b.textContent.includes('Start journey'),
-      ),
+      Array.from(container.querySelectorAll('button')).some((b) => b.textContent.includes('Start journey')),
     )
 
     // ---- live journey ----------------------------------------------------
@@ -452,10 +447,7 @@ async function main() {
       await click(compareFromDetail)
       const rows = await waitFor('.compare__row')
       check('the comparison lists options', rows.length > 0, `${rows.length} rows`)
-      check(
-        'the comparison highlights the cheapest',
-        container.querySelector('.compare__row--best') !== null,
-      )
+      check('the comparison highlights the cheapest', container.querySelector('.compare__row--best') !== null)
       check('the comparison quotes prices', /\£\d+\.\d\d/.test(container.textContent))
       const compareTimes = Array.from(container.querySelectorAll('.compare__clock')).map((node) =>
         node.textContent.trim(),
@@ -489,10 +481,7 @@ async function main() {
     // Ask for longer walks than the promise allows, the way a traveller with a
     // heavy bag and no bus stop nearby would.
     if (ranges.length) {
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        'value',
-      ).set
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
       await act(async () => {
         setter.call(ranges[0], '30')
         ranges[0].dispatchEvent(new window.Event('input', { bubbles: true }))
@@ -544,9 +533,7 @@ async function main() {
   check('the search card has from and to', container.querySelectorAll('.place__input').length === 2)
   check(
     'the home screen offers the primary action',
-    Array.from(container.querySelectorAll('button')).some((b) =>
-      b.textContent.includes('Find my journey'),
-    ),
+    Array.from(container.querySelectorAll('button')).some((b) => b.textContent.includes('Find my journey')),
   )
   check('the bottom navigation is present', container.querySelectorAll('.tabbar__item').length === 4)
   check('saved places are offered', container.textContent.includes('Saved places'))
@@ -557,10 +544,7 @@ async function main() {
   const inputs = Array.from(container.querySelectorAll('.place__input'))
   const toInput = inputs[1]
   const fromInput = inputs[0]
-  const setInputValue = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value',
-  ).set
+  const setInputValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
   const type = async (input, text) => {
     await act(async () => {
       input.dispatchEvent(new window.Event('focus', { bubbles: true }))
@@ -569,9 +553,7 @@ async function main() {
     })
   }
   const primary = () =>
-    Array.from(container.querySelectorAll('button')).find((b) =>
-      b.textContent.includes('Find my journey'),
-    )
+    Array.from(container.querySelectorAll('button')).find((b) => b.textContent.includes('Find my journey'))
 
   if (toInput && fromInput) {
     // Start from empty fields: the deep link we arrived on filled them in.
@@ -623,6 +605,64 @@ async function main() {
         'typing a journey and pressing the button finds it',
         results.length > 0,
         `${results.length} cards after searching from Home`,
+      )
+    }
+  }
+
+  // ---- the real bus network ----------------------------------------------
+  // A screen about published data: real route numbers, real operators, real
+  // stops -- and no times, because a route shape is not a timetable.
+  await act(async () => {
+    window.location.hash = '#/bus'
+  })
+  const busRows = await waitFor('.bus__row')
+  const busText = container.textContent
+  check('the bus screen lists real routes', busRows.length > 0, `${busRows.length} rows`)
+  check(
+    'the bus screen says how much network it holds',
+    /\d+ real routes/.test(busText) && /operators/.test(busText),
+    (busText.match(/\d+ real routes[^.]*/) || [''])[0].slice(0, 80),
+  )
+  check(
+    'a route row names both ends of the line',
+    /to /.test(busRows[0]?.textContent || ''),
+    (busRows[0]?.textContent || '').slice(0, 90),
+  )
+  check(
+    'the bus screen never shows a clock it does not have',
+    !/\b\d{1,2}:\d{2}\b/.test(busText) && !busText.includes('--:--'),
+    'no departure times on the real bus layer',
+  )
+
+  // Between two places: the corridor answer, with the stop to board at.
+  const betweenTab = Array.from(container.querySelectorAll('button')).find(
+    (b) => b.textContent.trim() === 'Between places',
+  )
+  if (betweenTab) {
+    await click(betweenTab)
+    const inputs = Array.from(container.querySelectorAll('.bus__options, input'))
+    const fields = Array.from(container.querySelectorAll('input'))
+    if (fields.length >= 2) {
+      await type(fields[0], 'Coventry')
+      await type(fields[1], 'Leicester')
+    }
+    const findButton = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent.includes('Find real services'),
+    )
+    if (findButton) {
+      await click(findButton)
+      const options = await waitFor('.bus__option')
+      check('a corridor returns real services', options.length > 0, `${options.length} options`)
+      const optionText = options[0]?.textContent || ''
+      check(
+        'a corridor says which service to catch and where to board',
+        /148/.test(optionText) && /Board at/.test(optionText) && /Get off at/.test(optionText),
+        optionText.replace(/\s+/g, ' ').slice(0, 120),
+      )
+      check(
+        'a corridor names its direction honestly',
+        /Published this way round|published the other way round/.test(optionText),
+        optionText.includes('published the other way round') ? 'reverse, stated' : 'forward, stated',
       )
     }
   }

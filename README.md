@@ -20,15 +20,15 @@ features and national-scale deployment are deliberately out of scope (see
 
 | Area | What exists |
 | --- | --- |
-| Data | 42,502 real NaPTAN named stops, 10,009 real rail TIPLOCs, 69 real train operating companies, 116,104 real regional access points, 83 compiled corridors over 403 modelled stops |
+| Data | **514 real published bus routes** (144 services, 5 operators, 694 named stops, shapes traced from GTFS stop sequences), 42,502 real NaPTAN named stops, 10,009 real rail TIPLOCs, 69 real train operating companies, 116,104 real regional access points, 83 compiled corridors over 403 modelled stops |
 | Engine | Multi-criteria RAPTOR with Pareto labelling, walking access and interchange, on-demand first/last mile, and a service-day filter |
 | Fares | Ticket-combination optimiser: singles, off-peak, advance, operator day tickets, contactless caps, railcard/student/child/season discounts |
 | Ranking | Seven traveller preferences, four normalised criteria, archetype labelling (Cheapest, Fastest, Fewest changes, Least walking, Lowest emissions, Best value, Step-free) |
 | Walking | A 15-minute promise by default, a stated limit the traveller can tighten (10 / 15 / 20 minutes), and longer walks returned as a labelled choice rather than as the answer |
-| API | 25 endpoints over FastAPI, OpenAPI documented at `/api/docs` |
-| Map | A real slippy map — OpenStreetMap streets, Esri satellite imagery or OpenTopoMap relief, pannable and zoomable by touch, wheel and buttons — with the journey drawn over it through every stop it calls at, and every one of the 83 modelled routes underneath |
-| App | React + TypeScript, built mobile-first: Home, Results, Journey details, Live, Cheapest/Fastest, price comparison, Saved places, Trips, Price alerts, Profile and Data — a map-first layout with a draggable sheet and a bottom nav, drawn from real coordinates with no map tile dependency |
-| Quality | 171 tests covering ingestion, the compiler, the graph, the engine, fares, ranking and every endpoint, plus a DOM render test that mounts the real app against the real API |
+| API | 31 endpoints over FastAPI, OpenAPI documented at `/api/docs` |
+| Map | A real slippy map — OpenStreetMap streets, Esri satellite imagery or OpenTopoMap relief, pannable and zoomable by touch, wheel and buttons — with the journey drawn over it through every stop it calls at, the 83 modelled routes underneath, and the 514 published bus routes as their own opt-in layer |
+| App | React + TypeScript, built mobile-first: Home, Results, Journey details, Live, Cheapest/Fastest, price comparison, Saved places, Trips, Price alerts, Profile, **UK bus routes** and Data — a map-first layout with a draggable sheet and a bottom nav |
+| Quality | 200 tests covering ingestion, the compiler, the graph, the engine, fares, ranking, the real bus network and every endpoint, plus an 84-check DOM render test that mounts the real app against the real API |
 
 ---
 
@@ -102,6 +102,66 @@ fetched, the map says so and keeps drawing the route over a plain background,
 because the route is the part that matters. Attribution for the provider in use
 is shown on the map, and moves with the style.
 
+## The real bus network
+
+MoveIn holds two different things, and keeps them apart on purpose.
+
+* **The compiled timetable** (above) is what journeys are planned on.
+* **The real bus network** is what the operators actually publish: route
+  numbers, operators, the ordered stops each service calls at, and the shape it
+  drives. 514 routes across 144 services from 5 operators — Stagecoach Midlands,
+  Stagecoach Oxfordshire, Arriva Beds & Bucks, Arriva Herts & Essex, Red Rose
+  Travel and Redline — every one traceable to an operator TransXChange
+  publication on the DfT Bus Open Data Service, and every stop matched to the
+  real NaPTAN register by coordinate.
+
+It has **no departure times**, and says so everywhere it appears: a route shape
+is not a timetable. What it answers is the question the timetable layer cannot —
+*which buses run between these two places, and where do I get on* — in the
+**UK bus routes** screen (`#/bus`) and through the API:
+
+```bash
+curl 'localhost:8000/api/bus/between?origin=Oxford&destination=Banbury'
+#  1 service — S4, Stagecoach Midlands, 16 stops, Frideswide Square → Bridge Street
+curl 'localhost:8000/api/bus/between?origin=Coventry&destination=Leicester'
+#  1 service — 148, Stagecoach Midlands, 78 stops, Trinity Street → St Margaret's
+```
+
+### All UK bus routes? Not all of them — and here is exactly how far it goes
+
+The national picture, from the Bus Open Data Service's own API: **936 published
+datasets**, roughly 1,700 bus operators, and a national GTFS download. That is
+the real target, and this prototype is a slice of it, not the whole thing.
+
+The slice is limited by one hard fact of this environment: **the code here has
+no route to the internet.** Not to BODS, not to TfL, not to tile servers — only
+GitHub, npm and PyPI are reachable, and no API key changes that; the connection
+is refused before a request is sent. So the national download cannot happen here.
+It is scripted, and it happens wherever there *is* a network:
+
+```bash
+export MOVEIN_BODS_API_KEY=...            # free from data.bus-data.dft.gov.uk
+.venv/bin/python scripts/fetch_bods_gtfs.py --list              # what exists
+.venv/bin/python scripts/fetch_bods_gtfs.py --area Nottingham --area Leicester
+.venv/bin/python scripts/import_gtfs_routes.py                  # compile it
+```
+
+`fetch_bods_gtfs.py` is resumable, filters by operator licence code (`--noc`),
+local authority area (`--area`) or free text, and says plainly when a machine
+cannot reach BODS rather than failing with a stack trace. `import_gtfs_routes.py`
+streams GTFS into the same compiled schema the app already reads — the loader
+merges every `compiled*.json.gz` it finds, so a national import *adds* to the
+network instead of replacing it. The compiler is tested without a network, on a
+five-stop fixture whose right answer is known by eye.
+
+Two more honest limits: the routes are matched to stops from MoveIn's NaPTAN
+extract, so a published line that never comes near a registered stop is not
+claimed; and one operator's file publishes the full Coventry→Leicester line while
+the return is only published in reverse, which the API reports as
+`"direction": "reverse"` rather than hiding or guessing.
+
+---
+
 ## Data: what is real and what is compiled
 
 This matters more than any other paragraph in this file, so it is stated plainly
@@ -118,6 +178,12 @@ in the product too (`/api/data-sources`, and the **Data** screen in the app).
   modelled network.
 * **ATOC agency list** — 69 real train operating companies: names, codes,
   colours and websites.
+* **Operator bus routes** (DfT Bus Open Data Service, Open Government Licence
+  v3.0) — 514 real route variations of 144 services from 5 operators, with the
+  stops each calls at and the shape it drives, traced from the operators' own
+  TransXChange publications via the
+  [ukinteractivebusmap](https://github.com/ukinteractivebusmap/ukinteractivebusmap.github.io)
+  mirror, with every stop matched to NaPTAN by coordinate. No times.
 
 **Compiled, and not presented as anything else:**
 
@@ -132,6 +198,11 @@ in the product too (`/api/data-sources`, and the **Data** screen in the app).
   bus cap, TfL tube pricing, tapered rail fares with off-peak and advance
   products, per-operator coach pricing, taxi meters) at the level of policy,
   not at the level of every fare record.
+
+The **national** bus dataset needs one command on a machine with a network —
+`scripts/fetch_bods_gtfs.py` plus `scripts/import_gtfs_routes.py`, documented in
+`docs/DATA_SOURCES.md`. The app never needs the API key; only that fetch does,
+and the key lives in `.env`, which is gitignored.
 
 `docs/DATA_SOURCES.md` lists every file, licence, publisher and adapter in
 detail. The live feeds MoveIn cannot reach from this sandbox (BODS
@@ -234,6 +305,10 @@ the feed plumbing is already built and tested.
 | POST | `/api/journeys/compare-emissions` | Compare modes on one trip |
 | GET | `/api/network/summary` · `/operators` · `/routes` · `/coverage` | What the network contains, and how much of each city's real stop register it models |
 | GET | `/api/network/map` | Every route as the line it runs, as coordinates, for the map overlay |
+| GET | `/api/bus/coverage` · `/operators` | How much real published bus network MoveIn holds, and from whom (with `has_times: false` stated out loud) |
+| GET | `/api/bus/routes` · `/routes/{id}` | Browse real routes by number, operator, town or stop; one route stop by stop with its shape |
+| GET | `/api/bus/map` | Published routes as drawable lines, filtered by operator or area, optionally simplified |
+| GET | `/api/bus/between` | **Which real services run between two places** — with the stop to board at, the stop to get off at, and an honest direction |
 | GET | `/api/fares/products` · `/operators` | The fare table |
 | GET | `/api/live/vehicles` · `/alerts` | Where the vehicles are, what is disrupted |
 | POST | `/api/live/track` | Follow the journey you are on |
@@ -288,8 +363,10 @@ docstring, and every one of them was a real defect found by running the thing.
 Phase 1 (this prototype) is journey planning from real data with a real engine.
 The next phases, in the order they unlock value:
 
-1. **Phase 2 — live and personal.** Live BODS/TransXchange timetables and
-   SIRI-VM vehicle positions instead of the simulator; accounts and synced
+1. **Phase 2 — live and personal.** Run the national import
+   (`scripts/fetch_bods_gtfs.py` → `scripts/import_gtfs_routes.py`) where there
+   is a network, then plan on real GTFS timetables instead of the compiled
+   layer; live SIRI-VM vehicle positions instead of the simulator; accounts and synced
    saved journeys; push notifications when a watched fare drops; maps with real
    cartography instead of the schematic view.
 2. **Phase 3 — national scale.** PostgreSQL/PostGIS (the schema is already

@@ -23,6 +23,7 @@ from ..config import Settings, get_settings
 from ..domain.models import Mode, Stop, TransportNetwork, to_uk_naive, uk_now
 from ..domain.network_spec import ALL_CORRIDORS, FareRule
 from ..domain.regions import REGIONS, REGIONS_BY_SLUG
+from ..domain.towns import exact_town, find_town
 from ..ingest.geo import haversine_m, walk_distance_m, walk_duration_s, walk_time_to_distance_m
 from ..ingest.gtfs import read_gtfs
 from ..ingest.network_compiler import _normalise_stop_name
@@ -236,6 +237,24 @@ class JourneyPlanner:
                 region=region.slug,
             )
 
+        # A real town, from the national station register.  This has to come
+        # before fuzzy stop-name matching, and has to be exact: "Banbury" is the
+        # town in Oxfordshire, not a street called Banbury Road in Coventry, but
+        # "Victoria Centre" is a shopping centre in Nottingham and not the town
+        # of Victoria.
+        town = exact_town(key)
+        if town is not None:
+            nearest = self.nearest_served_stop(town.lat, town.lon) or {}
+            return Place(
+                id=f"town:{key.replace(' ', '-')}",
+                label=town.name,
+                lat=town.lat,
+                lon=town.lon,
+                kind="town",
+                served=bool(nearest.get("reachable")),
+                nearest_served=nearest,
+            )
+
         # Prefix / substring on stop names.
         prefix = [s for name, s in self._name_index if name.startswith(key)]
         if not prefix:
@@ -281,6 +300,22 @@ class JourneyPlanner:
                 region=chosen[5],
                 served=False,
                 nearest_served=self.nearest_served_stop(chosen[2], chosen[3]) or {},
+            )
+
+        # Nothing in the register, but a real town all the same -- "Bicester"
+        # has stations even though MoveIn does not model it.  Better to name the
+        # town and say it is off-network than to fail on a place that exists.
+        town = find_town(key)
+        if town is not None:
+            nearest = self.nearest_served_stop(town.lat, town.lon) or {}
+            return Place(
+                id=f"town:{key.replace(' ', '-')}",
+                label=town.name,
+                lat=town.lat,
+                lon=town.lon,
+                kind="town",
+                served=bool(nearest.get("reachable")),
+                nearest_served=nearest,
             )
         return None
 

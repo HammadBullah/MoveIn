@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Section } from '../components/Controls'
+import { Button, Section } from '../components/Controls'
 import { Icon } from '../components/Icons'
 import { api } from '../lib/api'
-import type { CoverageResponse, DataSourcesResponse, NetworkSummary } from '../lib/types'
+import type { CoverageResponse, DataSourcesResponse, NetworkSummary, RealBusCoverage } from '../lib/types'
 
 /**
  * Where the numbers come from.
@@ -11,18 +11,25 @@ import type { CoverageResponse, DataSourcesResponse, NetworkSummary } from '../l
  * prints the real files, the compiled layer, and — importantly — how much of
  * each city MoveIn can actually plan through, including the parts it cannot.
  */
-export function DataScreen({ onBack }: { onBack: () => void }) {
+export function DataScreen({ onBack, onOpenBus }: { onBack: () => void; onOpenBus?: () => void }) {
   const [sources, setSources] = useState<DataSourcesResponse | null>(null)
   const [network, setNetwork] = useState<NetworkSummary | null>(null)
   const [coverage, setCoverage] = useState<CoverageResponse | null>(null)
+  const [realBus, setRealBus] = useState<RealBusCoverage | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([api.dataSources(), api.networkSummary(), api.networkCoverage()])
-      .then(([data, summary, cover]) => {
+    Promise.all([
+      api.dataSources(),
+      api.networkSummary(),
+      api.networkCoverage(),
+      api.realBusCoverage().catch(() => null),
+    ])
+      .then(([data, summary, cover, bus]) => {
         setSources(data)
         setNetwork(summary)
         setCoverage(cover)
+        setRealBus(bus)
       })
       .catch(() => setError('The API is not reachable, so the provenance cannot be shown.'))
   }, [])
@@ -42,6 +49,35 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
           <Icon name="alert" size={16} />
           <span>{error}</span>
         </div>
+      )}
+
+      {realBus && (
+        <Section title="Real UK bus routes">
+          <div className="card card--pad">
+            <div className="data__figures">
+              <span>
+                <strong>{realBus.routes.toLocaleString()}</strong>
+                <em>routes</em>
+              </span>
+              <span>
+                <strong>{realBus.services.toLocaleString()}</strong>
+                <em>services</em>
+              </span>
+              <span>
+                <strong>{realBus.operators}</strong>
+                <em>operators</em>
+              </span>
+              <span>
+                <strong>{realBus.named_stops.toLocaleString()}</strong>
+                <em>named stops</em>
+              </span>
+            </div>
+            <p className="small">{realBus.note}</p>
+            <p className="muted tiny">{realBus.coverage_note}</p>
+            <p className="muted tiny">{realBus.attribution}</p>
+            {onOpenBus && <Button onClick={onOpenBus}>Browse the bus routes</Button>}
+          </div>
+        </Section>
       )}
 
       {sources && (
@@ -124,10 +160,10 @@ export function DataScreen({ onBack }: { onBack: () => void }) {
       )}
 
       <p className="muted tiny data__note">
-        MoveIn bundles real NaPTAN stops, real rail station records and real operator registers.
-        The timetable layer is compiled from published service patterns rather than downloaded
-        wholesale, because the national bus feeds are not reachable from this deployment — that
-        difference is stated here rather than hidden.
+        MoveIn bundles real NaPTAN stops, real rail station records and real operator registers. The timetable
+        layer is compiled from published service patterns rather than downloaded wholesale, because the
+        national bus feeds are not reachable from this deployment — that difference is stated here rather than
+        hidden.
       </p>
     </div>
   )

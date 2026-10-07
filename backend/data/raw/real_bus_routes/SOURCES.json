@@ -1,0 +1,14 @@
+{
+  "mirror": "https://github.com/ukinteractivebusmap/ukinteractivebusmap.github.io",
+  "upstream": "Operator TransXChange publications on the DfT Bus Open Data Service (data.bus-data.dft.gov.uk), traced to GTFS stop sequences",
+  "licence": "Open Government Licence v3.0",
+  "files": [
+    "Redline_OP71.geojson",
+    "Arriva_Beds_and_Bucks_OP58.geojson",
+    "Arriva_Herts_and_Essex_OP50.geojson",
+    "Red_Rose_Travel_OP362.geojson",
+    "stagecoach_oxford_routes.geojson",
+    "stagecoach_midlands_routes.geojson"
+  ],
+  "note": "Raw geometry, not committed: it is 47 MB and derivable. scripts/import_real_bus_routes.py compiles it to compiled.json.gz, which is committed."
+}
