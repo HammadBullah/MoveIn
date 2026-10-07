@@ -69,6 +69,10 @@ export function ResultsScreen({
   // real option, but it is not the answer to "how do I get there" -- so it waits
   // in its own section until the traveller asks for it, and the headline
   // badges never go to it.
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const activeJourney =
+    journeys.find((journey) => journey.id === selectedId) ?? journeys[0] ?? null
+
   const { comfortable, longWalk, cheapestLongWalk } = useMemo(() => {
     const comfortable: Journey[] = []
     const longWalk: Journey[] = []
@@ -89,7 +93,11 @@ export function ResultsScreen({
   return (
     <div className="screen screen--results">
       <div className="results__map">
-        <MapCanvas journey={journeys[0] ?? null} height={sheetHeight === 'full' ? 200 : 320} />
+        <MapCanvas
+          journey={activeJourney}
+          height="fill"
+          reserveBottom={sheetHeight === 'full' ? 0.9 : 0.58}
+        />
         <button type="button" className="map__back" onClick={onBack} aria-label="Back">
           <Icon name="back" size={20} />
         </button>
@@ -202,6 +210,8 @@ export function ResultsScreen({
                     key={journey.id}
                     journey={journey}
                     cheapestPrice={cheapest?.price}
+                    selected={journey.id === activeJourney?.id}
+                    onSelect={() => setSelectedId(journey.id)}
                     onOpen={() => onOpenJourney(journey)}
                     onCompare={onCompare}
                   />
@@ -232,6 +242,8 @@ export function ResultsScreen({
                         key={journey.id}
                         journey={journey}
                         cheapestPrice={cheapest?.price}
+                        selected={journey.id === activeJourney?.id}
+                        onSelect={() => setSelectedId(journey.id)}
                         onOpen={() => onOpenJourney(journey)}
                         onCompare={onCompare}
                       />

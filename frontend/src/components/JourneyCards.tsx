@@ -46,13 +46,18 @@ export function JourneyCard({
   cheapestPrice,
   onOpen,
   onCompare,
+  onSelect,
   expanded = false,
+  selected = false,
 }: {
   journey: Journey
   cheapestPrice?: number
   onOpen: () => void
   onCompare?: () => void
+  /** Tapping the card shows it on the map. */
+  onSelect?: () => void
   expanded?: boolean
+  selected?: boolean
 }) {
   const badge = pickBadge(journey)
   const operators = journey.operators?.map((op) => op.name).filter(Boolean) ?? []
@@ -62,7 +67,11 @@ export function JourneyCard({
       : null
 
   return (
-    <article className={`jcard${expanded ? ' jcard--open' : ''}`} data-journey={journey.id}>
+    <article
+      className={`jcard${expanded ? ' jcard--open' : ''}${selected ? ' jcard--selected' : ''}`}
+      data-journey={journey.id}
+      onClick={onSelect}
+    >
       <header className="jcard__top">
         <span className="jcard__badges">
           {badge && <Badge kind={badge} />}

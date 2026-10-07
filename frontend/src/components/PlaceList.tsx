@@ -75,11 +75,14 @@ export function PlaceList({
   }, [])
 
   const choose = (hit: StopSuggestion) => {
+    // The engine resolves places by name, not by stop id, so what comes back to
+    // the parent is the name -- and the field shows the same thing the search
+    // will actually be given.
     const label = hit.name
     setValue(label)
     setOpen(false)
     setResults([])
-    onPick(hit.id.startsWith('region:') ? label : label, label)
+    onPick(label, label)
   }
 
   return (
@@ -95,9 +98,15 @@ export function PlaceList({
           aria-label={label ?? placeholder}
           autoFocus={autoFocus}
           onChange={(event) => {
-            setValue(event.target.value)
+            const text = event.target.value
+            setValue(text)
             setOpen(true)
             setCursor(-1)
+            // Typing is a decision too: the traveller should not have to press
+            // Enter before the form believes they have said where they want to
+            // go.  Without this the "Find my journey" button stays disabled
+            // while the text sits in the input.
+            onFreeText?.(text)
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={(event) => {

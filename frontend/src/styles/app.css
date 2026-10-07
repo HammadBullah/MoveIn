@@ -31,7 +31,6 @@
   --blue-soft: #eaf0fe;
   --red: #dc2626;
   --red-soft: #fdeceb;
-  --map-tint: #eef1fd;
 
   --r-xs: 10px;
   --r-sm: 13px;
@@ -1115,11 +1114,6 @@ input[type='range']::-webkit-slider-thumb {
   pointer-events: none;
 }
 
-.map__wash {
-  fill: var(--map-tint);
-  opacity: 0.55;
-}
-
 .map__canvas {
   z-index: 1;
 }
@@ -1128,10 +1122,78 @@ input[type='range']::-webkit-slider-thumb {
   animation: draw-in 0.5s ease both;
 }
 
+/* The white line under the route, so where two legs overlap the later one
+   still reads as the one you are on. */
+.map__route-casing {
+  stroke: #ffffff;
+  stroke-opacity: 0.86;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: draw-in 0.5s ease both;
+}
+
 @keyframes draw-in {
   from {
     opacity: 0;
   }
+}
+
+/* Real geography the engine knows: the stops the vehicle calls at. */
+.map__stop {
+  fill: #ffffff;
+  stroke-width: 2;
+}
+
+.map__graticule line {
+  stroke: color-mix(in srgb, var(--muted-2) 30%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+
+.map__stop-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  fill: var(--ink-2);
+  paint-order: stroke;
+  stroke: #ffffff;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  opacity: 0.92;
+}
+
+.map__grid-label {
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  fill: color-mix(in srgb, var(--muted) 78%, transparent);
+}
+
+/* A distance a person can read off, in the units they think in. */
+.map__scale {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(4px);
+  font-size: 0.66rem;
+  font-weight: 650;
+  color: var(--muted);
+}
+
+.map__scale-bar {
+  display: block;
+  height: 7px;
+  border-left: 1.5px solid var(--muted);
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  border-bottom-left-radius: 2px;
+  border-bottom-right-radius: 2px;
 }
 
 .map__label {
@@ -1314,7 +1376,13 @@ input[type='range']::-webkit-slider-thumb {
 
 .results__map {
   position: absolute;
-  inset: 0 0 auto 0;
+  inset: 0;
+  height: 100%;
+}
+
+/* The map is the screen; the sheet is laid over it. */
+.screen--results .map,
+.screen--live .map {
   height: 100%;
 }
 
@@ -1540,6 +1608,13 @@ input[type='range']::-webkit-slider-thumb {
 
 .jcard--open {
   box-shadow: 0 0 0 1.6px var(--accent), var(--shadow-1);
+}
+
+.jcard--selected {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 26%, transparent),
+    var(--shadow-1);
 }
 
 .jcard__top {

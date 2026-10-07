@@ -103,7 +103,7 @@ export function HomeScreen({
           </span>
           <div className="route-fields__fields">
             <PlaceList
-              query={value.origin === value.originLabel ? '' : value.origin}
+              query={value.originLabel || value.origin}
               placeholder="Current location"
               label="From"
               icon="target"
@@ -111,7 +111,7 @@ export function HomeScreen({
               onFreeText={(text) => onChange({ origin: text, originLabel: text })}
             />
             <PlaceList
-              query={value.destination === value.destinationLabel ? '' : value.destination}
+              query={value.destinationLabel || value.destination}
               placeholder="Where to?"
               label="To"
               icon="search"
@@ -246,15 +246,17 @@ export function HomeScreen({
               <button
                 type="button"
                 className="btn btn--quiet btn--sm"
-                onClick={() =>
-                  onChange({
-                    destination: place.query || place.name,
-                    destinationLabel: place.name,
-                  })
-                }
-                disabled={!place.query}
+                // An unset place is not a dead end: "Set" takes the traveller
+                // straight to the editor rather than sitting there greyed out.
+                onClick={() => {
+                  if (!place.query) {
+                    onOpenPlaces()
+                    return
+                  }
+                  onChange({ destination: place.query, destinationLabel: place.name })
+                }}
               >
-                Go
+                {place.query ? 'Go' : 'Set'}
               </button>
             </div>
           ))}

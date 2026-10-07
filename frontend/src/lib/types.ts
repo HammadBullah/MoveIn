@@ -105,7 +105,8 @@ export interface Leg {
   duration_s?: number
   distance_km?: number
   stops_count?: number
-  intermediate_stops?: { id: string; name: string }[]
+  /** Every stop the vehicle calls at, with the real coordinates to draw them. */
+  intermediate_stops?: { id: string; name: string; lat?: number; lon?: number }[]
   fare?: string
   fare_amount?: number
   co2_g?: number

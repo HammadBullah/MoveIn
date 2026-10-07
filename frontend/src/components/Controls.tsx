@@ -269,19 +269,33 @@ export function Sheet({
   className?: string
 }) {
   const [drag, setDrag] = useState(0)
+  // The ref is the source of truth for the gesture: pointermove and pointerup
+  // can arrive in the same frame, and reading the drag distance out of state at
+  // pointerup would then read a stale zero and throw the gesture away.
+  const dragRef = useRef(0)
   const startRef = useRef<{ y: number; height: 'half' | 'full' } | null>(null)
+  // A drag ends with a click on most pointers, and that click would undo the
+  // drag by toggling the sheet straight back.  Remember that this gesture moved
+  // so the tap handler can stand down.
+  const draggedRef = useRef(false)
 
   const onPointerDown = (event: React.PointerEvent) => {
     startRef.current = { y: event.clientY, height }
+    draggedRef.current = false
+    dragRef.current = 0
     ;(event.target as HTMLElement).setPointerCapture?.(event.pointerId)
   }
   const onPointerMove = (event: React.PointerEvent) => {
     if (!startRef.current) return
-    setDrag(event.clientY - startRef.current.y)
+    const moved = event.clientY - startRef.current.y
+    if (Math.abs(moved) > 6) draggedRef.current = true
+    dragRef.current = moved
+    setDrag(moved)
   }
   const onPointerUp = () => {
     if (!startRef.current) return
-    const moved = drag
+    const moved = dragRef.current
+    dragRef.current = 0
     setDrag(0)
     if (Math.abs(moved) > 48) {
       const next = moved < 0 ? 'full' : 'half'
@@ -303,7 +317,13 @@ export function Sheet({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        onClick={() => onHeightChange?.(height === 'full' ? 'half' : 'full')}
+        onClick={() => {
+          if (draggedRef.current) {
+            draggedRef.current = false
+            return
+          }
+          onHeightChange?.(height === 'full' ? 'half' : 'full')
+        }}
       >
         <span className="sheet__handle" />
       </button>

@@ -117,7 +117,7 @@ export function LiveScreen({
   return (
     <div className="screen screen--live">
       <div className="results__map">
-        <MapCanvas journey={journey} height={300} live />
+        <MapCanvas journey={journey} height="fill" reserveBottom={0.55} live />
         <button type="button" className="map__back" onClick={onBack} aria-label="Back">
           <Icon name="back" size={20} />
         </button>
