@@ -359,7 +359,12 @@ def main() -> None:
     parser.add_argument("--noc", action="append", default=[], help="Operator licence code, e.g. NCTR")
     parser.add_argument("--text", default=None, help="Match operator name, route number or area")
     parser.add_argument("--all", action="store_true", help="Every published dataset")
-    parser.add_argument("--limit", type=int, default=None, help="Stop after this many datasets")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Download at most this many datasets, after filtering (the catalogue is always listed in full)",
+    )
     parser.add_argument("--list", action="store_true", help="Only list what exists; download nothing")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be fetched")
     parser.add_argument(
@@ -378,7 +383,7 @@ def main() -> None:
     if not args.no_probe:
         probe(key)
     print("Asking BODS what exists...")
-    datasets = fetch_datasets(key, limit=args.limit)
+    datasets = fetch_datasets(key)
     print(f"{len(datasets)} published datasets available")
 
     wanted = [
@@ -388,6 +393,9 @@ def main() -> None:
         or matches(dataset, areas=args.area, nocs=args.noc, text=args.text)
     ]
     print(f"{len(wanted)} match the filter")
+    if args.limit and len(wanted) > args.limit:
+        print(f"downloading the first {args.limit} of them (--limit)")
+        wanted = wanted[: args.limit]
 
     if args.list:
         for dataset in wanted[:200]:
@@ -408,6 +416,16 @@ def main() -> None:
         return
 
     if not wanted:
+        areas = sorted(
+            {
+                (area.get("name") or "").strip()
+                for dataset in datasets
+                for area in (dataset.get("adminAreas") or [])
+                if (area.get("name") or "").strip()
+            }
+        )
+        print(f"the catalogue names {len(areas)} local authority areas, for example:")
+        print("  " + ", ".join(areas[:60]))
         raise SystemExit("Nothing matched.  Try --list to see what is there.")
 
     args.out.mkdir(parents=True, exist_ok=True)
