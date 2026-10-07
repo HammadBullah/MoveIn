@@ -718,3 +718,76 @@ wrote backend/data/raw/real_bus_routes/compiled_bods_all.json.gz (22.9 MB gzippe
 ops/fetch-bods.sh: line 154: dir: unbound variable
 === commit 2026-10-07T16:37:24Z ===
 report: -rw-r--r-- 1 runner runner 41804 Oct  7 16:37 ops/last-run.txt
+report file: 'ops/last-run.txt' (cwd /home/runner/work/MoveIn/MoveIn)
+=== 2026-10-07T16:48:41Z fetching published UK bus data ===
+budget: 60 minutes; compiling: all
+disk free: 86G
+
+--- can this machine reach BODS, and does anything need a key? ---
+52.85.151.10    data.bus-data.dft.gov.uk
+52.85.151.109   data.bus-data.dft.gov.uk
+catalogue without a key: HTTP 401
+{"detail":"Authentication credentials were not provided."}
+
+--- what regional files exist, and how big are they? ---
+  all            HTTP 200  ? bytes (0.0 MB)
+
+--- download, compile, one region at a time ---
+== all: recompiling (--force) over 23M
+
+== all: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  9880    0  9880    0     0  15208      0 --:--:-- --:--:-- --:--:-- 15200100  242k    0  242k    0     0   199k      0 --:--:--  0:00:01 --:--:--  199k100 14.5M    0 14.5M    0     0  6874k      0 --:--:--  0:00:02 --:--:-- 6874k100 48.2M    0 48.2M    0     0  15.2M      0 --:--:--  0:00:03 --:--:-- 15.1M100 72.3M    0 72.3M    0     0  17.3M      0 --:--:--  0:00:04 --:--:-- 17.3M100 95.4M    0 95.4M    0     0  18.4M      0 --:--:--  0:00:05 --:--:-- 21.1M100  123M    0  123M    0     0  20.0M      0 --:--:--  0:00:06 --:--:-- 24.9M100  158M    0  158M    0     0  22.0M      0 --:--:--  0:00:07 --:--:-- 28.7M100  192M    0  192M    0     0  23.6M      0 --:--:--  0:00:08 --:--:-- 28.9M100  227M    0  227M    0     0  24.8M      0 --:--:--  0:00:09 --:--:-- 30.9M100  261M    0  261M    0     0  25.7M      0 --:--:--  0:00:10 --:--:-- 33.2M100  296M    0  296M    0     0  26.5M      0 --:--:--  0:00:11 --:--:-- 34.4M100  330M    0  330M    0     0  27.1M      0 --:--:--  0:00:12 --:--:-- 34.4M100  365M    0  365M    0     0  27.7M      0 --:--:--  0:00:13 --:--:-- 34.4M100  399M    0  399M    0     0  28.2M      0 --:--:--  0:00:14 --:--:-- 34.4M100  433M    0  433M    0     0  28.6M      0 --:--:--  0:00:15 --:--:-- 34.4M100  468M    0  468M    0     0  28.9M      0 --:--:--  0:00:16 --:--:-- 34.4M100  502M    0  502M    0     0  29.2M      0 --:--:--  0:00:17 --:--:-- 34.4M100  537M    0  537M    0     0  29.5M      0 --:--:--  0:00:18 --:--:-- 34.4M100  571M    0  571M    0     0  29.8M      0 --:--:--  0:00:19 --:--:-- 34.4M100  606M    0  606M    0     0  30.0M      0 --:--:--  0:00:20 --:--:-- 34.4M100  640M    0  640M    0     0  30.2M      0 --:--:--  0:00:21 --:--:-- 34.4M100  674M    0  674M    0     0  30.4M      0 --:--:--  0:00:22 --:--:-- 34.4M100  709M    0  709M    0     0  30.6M      0 --:--:--  0:00:23 --:--:-- 34.4M100  743M    0  743M    0     0  30.7M      0 --:--:--  0:00:24 --:--:-- 34.4M100  778M    0  778M    0     0  30.9M      0 --:--:--  0:00:25 --:--:-- 34.4M100  812M    0  812M    0     0  31.0M      0 --:--:--  0:00:26 --:--:-- 34.4M100  829M    0  829M    0     0  30.5M      0 --:--:--  0:00:27 --:--:-- 30.9M100  837M    0  837M    0     0  29.7M      0 --:--:--  0:00:28 --:--:-- 25.7M100  849M    0  849M    0     0  29.1M      0 --:--:--  0:00:29 --:--:-- 21.1M100  876M    0  876M    0     0  29.0M      0 --:--:--  0:00:30 --:--:-- 19.7M100  906M    0  906M    0     0  29.0M      0 --:--:--  0:00:31 --:--:-- 18.8M100  939M    0  939M    0     0  29.2M      0 --:--:--  0:00:32 --:--:-- 21.9M100  963M    0  963M    0     0  29.0M      0 --:--:--  0:00:33 --:--:-- 25.0M100  995M    0  995M    0     0  29.1M      0 --:--:--  0:00:34 --:--:-- 29.1M100 1027M    0 1027M    0     0  29.2M      0 --:--:--  0:00:35 --:--:-- 30.2M100 1061M    0 1061M    0     0  29.3M      0 --:--:--  0:00:36 --:--:-- 30.9M100 1089M    0 1089M    0     0  29.3M      0 --:--:--  0:00:37 --:--:-- 30.0M100 1122M    0 1122M    0     0  29.4M      0 --:--:--  0:00:38 --:--:-- 31.8M100 1156M    0 1156M    0     0  29.5M      0 --:--:--  0:00:39 --:--:-- 32.2M100 1190M    0 1190M    0     0  29.6M      0 --:--:--  0:00:40 --:--:-- 32.4M100 1224M    0 1224M    0     0  29.7M      0 --:--:--  0:00:41 --:--:-- 32.6M100 1258M    0 1258M    0     0  29.8M      0 --:--:--  0:00:42 --:--:-- 33.6M100 1292M    0 1292M    0     0  29.9M      0 --:--:--  0:00:43 --:--:-- 34.0M100 1327M    0 1327M    0     0  30.0M      0 --:--:--  0:00:44 --:--:-- 34.1M100 1362M    0 1362M    0     0  30.1M      0 --:--:--  0:00:45 --:--:-- 34.3M100 1396M    0 1396M    0     0  30.2M      0 --:--:--  0:00:46 --:--:-- 34.4M100 1431M    0 1431M    0     0  30.3M      0 --:--:--  0:00:47 --:--:-- 34.6M100 1465M    0 1465M    0     0  30.4M      0 --:--:--  0:00:48 --:--:-- 34.5M100 1499M    0 1499M    0     0  30.5M      0 --:--:--  0:00:49 --:--:-- 34.4M100 1532M    0 1532M    0     0  30.5M      0 --:--:--  0:00:50 --:--:-- 34.1M100 1567M    0 1567M    0     0  30.6M      0 --:--:--  0:00:51 --:--:-- 34.0M100 1601M    0 1601M    0     0  30.7M      0 --:--:--  0:00:52 --:--:-- 34.0M100 1636M    0 1636M    0     0  30.7M      0 --:--:--  0:00:53 --:--:-- 33.9M100 1670M    0 1670M    0     0  30.8M      0 --:--:--  0:00:54 --:--:-- 34.0M100 1704M    0 1704M    0     0  30.8M      0 --:--:--  0:00:55 --:--:-- 34.3M100 1724M    0 1724M    0     0  30.9M      0 --:--:--  0:00:55 --:--:-- 34.4M
+   1807955781 bytes in 55.718882s
+   on disk: 1.7G
+   disk free: 85G
+== all: compiling real routes into MoveIn's schema, straight from the zip
+
+--- compile report opened 2026-10-07T16:49:38+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/all.zip
+Reading stops...
+  312,761 named stops
+Reading routes...
+  13,599 bus routes
+Reading trips...
+  1,556,582 trips; reading stop_times for 194,176
+Reading stop_times...
+Reading shapes...
+
+routes:     24,022
+operators:  548
+stops:      305,946
+peak memory: 3,300 MB (the sample was 12 trips per direction)
+wrote backend/data/raw/real_bus_routes/compiled_bods_all.json.gz (22.9 MB gzipped)
+
+--- compile report opened 2026-10-07T16:49:38+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/all.zip
+Reading stops...
+  312,761 named stops
+Reading routes...
+  13,599 bus routes
+Reading trips...
+  1,556,582 trips; reading stop_times for 194,176
+Reading stop_times...
+Reading shapes...
+
+routes:     24,022
+operators:  548
+stops:      305,946
+peak memory: 3,300 MB (the sample was 12 trips per direction)
+wrote backend/data/raw/real_bus_routes/compiled_bods_all.json.gz (22.9 MB gzipped)
+   compiled: 23M
+   elapsed: 11 min, budget left: 49 min
+
+--- published timetables, through the DfT's own extractor ---
+no BODS key available to this runner, so the API-keyed extraction is skipped.
+the regional files above need no key; the catalogue and the per-operator
+datasets do.  to enable this phase, add a repository secret named
+BODS_API_KEY (Settings -> Secrets and variables -> Actions -> New secret).
+
+=== 2026-10-07T17:00:34Z result ===
+-rw-r--r-- 1 runner runner 24023698 Oct  7 17:00 backend/data/raw/real_bus_routes/compiled_bods_all.json.gz
+no extractor output
+=== commit 2026-10-07T17:00:34Z ===
+report: -rw-r--r-- 1 runner runner 49000 Oct  7 17:00 ops/last-run.txt
