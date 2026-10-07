@@ -133,11 +133,16 @@ for region in "${REGIONS[@]}"; do
   # The compiler reads the GTFS tables out of the zip itself.  Unpacking first
   # needs 11 GB for the national file, which once killed a run at the commit
   # step on a full disk; this needs the 1.7 GB download and nothing more.
+  # Eight evenly spread trips per direction is plenty to find the trunk of a
+  # day, and memory follows the sample: the national file has 1.5 million trips.
+  sample=12
+  [ "$region" = "all" ] && sample=8
   if python scripts/import_gtfs_routes.py \
       --source "$zip" \
       --out "$out" \
       --prefix "$region" \
-      --region "$region"; then
+      --region "$region" \
+      --sample "$sample"; then
     echo "   compiled: $(du -h "$out" | cut -f1)"
   else
     echo "   compile failed -- leaving the feed for the next run"

@@ -9,3 +9,4 @@
 # run 6: regional bulk GTFS, keyless, compiled per region
 # run 7: only the national file, recompiled --force so it carries the published times
 # run 8: national recompile --force, with stop ids and published times
+# run 9: national recompile at eight samples per direction
