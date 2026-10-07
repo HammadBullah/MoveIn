@@ -126,11 +126,22 @@ where do I get on* — in the **UK bus routes** screen (`#/bus`) and through the
 API:
 
 ```bash
-curl 'localhost:8000/api/bus/between?origin=Oxford&destination=Banbury'
-#  1 service — S4, Stagecoach Midlands, 16 stops, Frideswide Square → Bridge Street
 curl 'localhost:8000/api/bus/between?origin=Coventry&destination=Leicester'
-#  1 service — 148, Stagecoach Midlands, 78 stops, Trinity Street → St Margaret's
+#  5 services, each with the operator's published clock:
+#  777 National Express  19:00 Pool Meadow Bus Station → 19:55 St Margaret's Bus Station
+#  X6  Arriva Midlands   06:55 Pool Meadow Bus Station → 08:25 St Margaret's Bus Station
+#  148 Stagecoach Midlands 19:40 Sainsbury's → 22:12 St Margaret's Bus Station
+curl 'localhost:8000/api/bus/cities'      # how much published bus each city has
 ```
+
+**The city answer, measured.** `/api/bus/cities` counts, for each of 30 UK cities,
+how many published routes call within 6 km of the centre and how many of those
+keep both ends within 8 km of it — a city bus rather than an inter-city one. It
+is counted from the routes, never from a register of who may run what, and the
+app prints it on the **Data** screen: Newcastle 198 city-internal of 446 nearby,
+Nottingham 190 of 322, London 144 of 693, Hull 133 of 252, Manchester 132 of 372,
+Plymouth 109 of 168, Oxford 96 of 264 — and Nuneaton 76 of 152, Rugby 49 of 113,
+Banbury 30 of 110. Every one of those numbers came out of the published feed.
 
 ### All UK bus routes? This is the published national file, and here is exactly how far it goes
 
