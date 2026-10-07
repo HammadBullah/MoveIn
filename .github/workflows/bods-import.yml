@@ -9,6 +9,9 @@ name: Fetch real UK bus data from BODS
 # Triggered by pushing a change to `ops/fetch-bods` (a sentinel: the paths filter
 # keeps normal commits from starting fetches, and the artifact this job commits
 # is not in the filter, so the job cannot trigger itself).
+#
+# Everything it learns is written to `ops/last-run.txt` and committed, because
+# this environment cannot read Actions logs -- only the repository.
 
 on:
   push:
@@ -22,7 +25,11 @@ permissions:
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
+    env:
+      MOVEIN_BODS_API_KEY: ${{ secrets.BODS_API_KEY }}
+      MOVEIN_BODS_ALLOW_ANONYMOUS: '1'
+      REPORT: ops/last-run.txt
     steps:
       - uses: actions/checkout@v4
 
@@ -30,47 +37,56 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Can this runner reach BODS, and does it need a key?
-        id: probe
+      - name: Install what the fetcher needs
         run: |
-          code=$(curl -s -o /tmp/list.json -w '%{http_code}' \
-            'https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1' || echo 000)
-          echo "catalogue without a key: HTTP $code"
-          head -c 300 /tmp/list.json 2>/dev/null; echo
-          dl=$(curl -sL -o /tmp/one.zip -w '%{http_code}' \
-            'https://data.bus-data.dft.gov.uk/timetable/dataset/465/download/' || echo 000)
-          size=$(stat -c%s /tmp/one.zip 2>/dev/null || echo 0)
-          echo "dataset download without a key: HTTP $dl, $size bytes"
-          if [ "$dl" = "200" ] && [ "$size" -gt 1000 ]; then
-            echo "anonymous=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "anonymous=no" >> "$GITHUB_OUTPUT"
-          fi
-          echo "file type:"; file /tmp/one.zip 2>/dev/null || true
+          exec 2>&1 | tee -a "$REPORT"
+          pip install --quiet httpx || echo "pip failed"
+
+      - name: Probe — can a runner reach BODS, and does it need a key?
+        run: |
+          exec 2>&1 | tee -a "$REPORT"
+          echo "=== probe $(date -u +%FT%TZ) ==="
+          echo "key present: $([ -n "$MOVEIN_BODS_API_KEY" ] && echo yes || echo no)"
+          curl -s -o /tmp/list.json -w 'catalogue without key: HTTP %{http_code}\n' \
+            'https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1' || echo "catalogue failed"
+          head -c 200 /tmp/list.json 2>/dev/null; echo
+          curl -sL -o /tmp/one.zip -w 'download without key: HTTP %{http_code}, %{size_download} bytes\n' \
+            'https://data.bus-data.dft.gov.uk/timetable/dataset/465/download/' || echo "download failed"
+          ls -l /tmp/one.zip 2>/dev/null || true
 
       - name: Fetch datasets
-        env:
-          MOVEIN_BODS_API_KEY: ${{ secrets.BODS_API_KEY }}
-          MOVEIN_BODS_ALLOW_ANONYMOUS: '1'
+        id: fetch
+        continue-on-error: true
         run: |
+          exec 2>&1 | tee -a "$REPORT"
+          echo "=== fetch $(date -u +%FT%TZ) ==="
           python scripts/fetch_bods_gtfs.py \
             --out backend/data/raw/bods \
             --limit 60 \
             --area Nottingham --area Leicester --area Derby --area Coventry \
             --area Birmingham --area Sheffield --area Leeds --area Manchester \
             --area Milton Keynes --area Peterborough --area Slough --area Reading
+          echo "fetched: $(find backend/data/raw/bods -name manifest.json | wc -l) dataset manifests"
 
       - name: Compile the real routes
+        id: compile
+        continue-on-error: true
         run: |
+          exec 2>&1 | tee -a "$REPORT"
+          echo "=== compile $(date -u +%FT%TZ) ==="
           python scripts/import_gtfs_routes.py \
             --source backend/data/raw/bods \
             --out backend/data/raw/real_bus_routes/compiled_bods.json.gz
+          ls -l backend/data/raw/real_bus_routes/compiled_bods.json.gz 2>/dev/null || true
 
-      - name: Commit the compiled network back to this branch
+      - name: Commit the result and the report
+        if: always()
         run: |
+          exec 2>&1 | tee -a "$REPORT"
           git config user.name 'movein-bot'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add backend/data/raw/real_bus_routes/compiled_bods.json.gz backend/data/raw/bods/manifest.json 2>/dev/null || true
-          git add -f backend/data/raw/bods/manifest.json 2>/dev/null || true
-          git commit -m "Fetch published UK bus routes from the Bus Open Data Service" || echo "nothing changed"
-          git push
+          git add "$REPORT"
+          git add -f backend/data/raw/bods/manifest.json || true
+          git add backend/data/raw/real_bus_routes/compiled_bods.json.gz || true
+          git commit -m "BODS fetch report and compiled routes" || echo "nothing changed"
+          git push || echo "push failed"
