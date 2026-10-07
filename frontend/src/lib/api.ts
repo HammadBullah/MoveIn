@@ -3,6 +3,7 @@ import type {
   DataSourcesResponse,
   LiveAlert,
   LiveVehicle,
+  NetworkMapResponse,
   NetworkSummary,
   Place,
   Preference,
@@ -125,6 +126,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ...body, device_key: deviceKey() }),
     }),
+
+  /** Every route in the modelled network, as the line it actually runs. */
+  networkMap: (mode?: string) =>
+    request<NetworkMapResponse>(`/network/map${mode ? `?mode=${encodeURIComponent(mode)}` : ''}`),
 
   compareEmissions: (origin: string, destination: string) =>
     request<{

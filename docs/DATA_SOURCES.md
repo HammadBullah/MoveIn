@@ -130,6 +130,38 @@ sample disruptions. The response includes `"source": "simulated from the
 compiled timetable"` so no client can mistake them for live reports. The
 SIRI-VM adapter implements the same interface.
 
+## Base map tiles — a third-party dependency, stated as one
+
+The map in the app is not drawn from MoveIn's data alone, and pretending
+otherwise would be dishonest. The base layer is **tiles fetched by the
+traveller's browser** from a public provider; MoveIn draws its own routes and
+stops over the top.
+
+| Style | Provider | Endpoint | Licence and terms |
+| --- | --- | --- | --- |
+| Streets | OpenStreetMap | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` | ODbL data, © OpenStreetMap contributors. [Tile usage policy](https://operations.osmfoundation.org/policies/tiles/) — fine for a prototype's traffic, **not** for a production launch |
+| Satellite | Esri World Imagery | `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` | Imagery © Esri, Maxar, Earthstar Geographics. Free for non-commercial use with attribution |
+| Terrain | OpenTopoMap | `https://{a,b,c}.tile.opentopomap.org/{z}/{x}/{y}.png` | © OpenStreetMap contributors, SRTM · © OpenTopoMap (CC-BY-SA) |
+
+Three consequences, all of them deliberate:
+
+1. **Attribution is on the map**, not in a config file, and it changes with the
+   style — because the licence requires it and because a map that hides where it
+   came from is a map you cannot check.
+2. **Moving to production means changing providers** (a keyed or self-hosted
+   tile server, or a vector basemap). That is a one-entry change in
+   `frontend/src/lib/basemaps.ts`; nothing else in the app knows where tiles
+   come from.
+3. **Tiles can fail.** They are a network dependency the traveller's browser
+   makes directly. If they do not arrive, the map says so and keeps drawing the
+   route over a plain background — the route is the part that matters, and the
+   MapIn data on top of the base is MoveIn's own throughout.
+
+The route and network geometry drawn over the tiles comes from the engine's own
+stop coordinates, served by `GET /api/network/map` — real NaPTAN stops between
+real places, at their published coordinates. Nothing about the shape of a route
+is invented to make the map look better.
+
 ## Datasets MoveIn could not fetch, and what it did instead
 
 Each of these is unreachable from this environment. Rather than pretend, MoveIn

@@ -3,20 +3,21 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "MoveIn — all-in-one multi-modal UK journey planner",
+  "description": "MoveIn \u2014 all-in-one multi-modal UK journey planner",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b --noCheck && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test:render": "node tests/render.mjs",
-    "map:preview": "node tests/map-preview.mjs"
+    "test:render": "node tests/render.mjs"
   },
   "dependencies": {
+    "leaflet": "^1.9.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.22",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

@@ -61,6 +61,8 @@ async function main() {
   globalThis.document = window.document
   for (const name of [
     'HTMLElement',
+    'Element',
+    'SVGElement',
     'Node',
     'Event',
     'MouseEvent',
@@ -85,7 +87,12 @@ async function main() {
   const frameFor = (node) => {
     const classes = node.classList || { contains: () => false }
     const mapish =
-      classes.contains('map') || classes.contains('results__map') || classes.contains('viewport')
+      classes.contains('map') ||
+      // Leaflet's container.  It is given a size in CSS by its parent, so a
+      // zero here is a zero-sized map, and Leaflet cannot fit bounds into that.
+      classes.contains('map__canvas') ||
+      classes.contains('results__map') ||
+      classes.contains('viewport')
     if (!mapish) return null
     // An inline pixel height wins, exactly as it does in a browser -- which is
     // what makes a map that sizes itself from its own measurement fail here.
@@ -166,17 +173,36 @@ async function main() {
   const text = container.textContent
 
   check('the results screen renders cards', cards.length > 0, `${cards.length} cards`)
-  check('the map is drawn from real coordinates', container.querySelector('.map__route') !== null)
-  check('the map marks the route ends', container.querySelectorAll('.map__marker').length >= 2)
 
-  // The line has to be the vehicle's actual path, not a ruler between the ends.
-  // A coach that calls at Derby bends through Derby; if the path is two points
-  // long, the map is drawing a journey nobody takes.
-  const paths = Array.from(container.querySelectorAll('.map__route'))
-  const vertices = paths.map((path) => {
-    const d = path.getAttribute('d') || ''
-    return (d.match(/[ML]/g) || []).length
-  })
+  // ---- the map -----------------------------------------------------------
+  // A real map: tiles from a provider, the journey drawn over them, and the
+  // whole modelled network underneath if asked for.
+  const mapNode = container.querySelector('.map__canvas')
+  check('the map is a real slippy map', Boolean(container.querySelector('.leaflet-container')))
+  check('the map fills its frame', mapNode?.style?.height === '' || mapNode === null)
+
+  const tiles = Array.from(container.querySelectorAll('.leaflet-tile-pane img'))
+  check(
+    'the map pulls real tiles',
+    tiles.length > 0 && tiles.every((tile) => /^https:\/\//.test(tile.getAttribute('src') || '')),
+    `${tiles.length} tiles, first src: ${tiles[0]?.getAttribute('src')?.slice(0, 60)}`,
+  )
+  check(
+    'the tiles are street tiles by default',
+    String(tiles[0]?.getAttribute('src')).includes('tile.openstreetmap.org'),
+    String(tiles[0]?.getAttribute('src')).slice(0, 80),
+  )
+  check(
+    'the map credits its data',
+    /OpenStreetMap/.test(container.querySelector('.map__attribution')?.textContent || ''),
+    container.querySelector('.map__attribution')?.textContent,
+  )
+
+  // The route: the vehicle's own path through the stops it calls at, not a
+  // ruler between the ends.  A coach that calls at Derby bends through Derby.
+  const paths = Array.from(container.querySelectorAll('path.map__route'))
+  const vertices = paths.map((path) => (path.getAttribute('d') || '').split(/[ML]/).length - 1)
+  check('the journey is drawn on the map', paths.length > 0, `${paths.length} leg paths`)
   check(
     'the route follows the stops it calls at',
     vertices.some((count) => count > 2),
@@ -184,62 +210,105 @@ async function main() {
   )
   check(
     'every stop on the route is drawn',
-    container.querySelectorAll('.map__stop').length >= 1,
-    `${container.querySelectorAll('.map__stop').length} intermediate stops drawn`,
-  )
-  check('the map states its scale', Boolean(container.querySelector('.map__scale-text')?.textContent))
-  check(
-    'the map has a ground layer to draw on',
-    Boolean(container.querySelector('.map__base rect')),
-  )
-  check(
-    'the map does not size itself from its own measurement',
-    (container.querySelector('.map')?.getAttribute('style') || '') === '',
-    `inline style: ${container.querySelector('.map')?.getAttribute('style')}`,
-  )
-
-  // The map has to occupy the frame it was given, and the route has to be drawn
-  // where a person can see it -- above the sheet, not behind it.
-  const mapSvg = container.querySelector('svg.map__canvas')
-  const viewBox = (mapSvg?.getAttribute('viewBox') || '').split(/\s+/).map(Number)
-  check(
-    'the map fills its container rather than a fixed strip',
-    viewBox[3] >= FRAME.height * 0.9,
-    `viewBox height ${viewBox[3]} of a ${FRAME.height}px frame (height="fill" must come from CSS)`,
-  )
-  // jsdom does not implement getBBox, so read the points out of the paths.  The
-  // first path is the walk to the stop, which is a few metres of the map: what
-  // matters is the whole route, so take the union.
-  const routeBox = unionBounds(
-    paths.map((path) => pathBounds(path.getAttribute('d') || '')).filter(Boolean),
-  )
-  const drawn = routeBox ?? { top: NaN, bottom: NaN, width: NaN, height: NaN }
-  check(
-    'the route is drawn above the sheet',
-    drawn.bottom <= viewBox[3] * 0.45,
-    `route spans y ${Math.round(drawn.top)}–${Math.round(drawn.bottom)} in a ${viewBox[3]}px map`,
-  )
-  check(
-    'the route is not squeezed into a sliver',
-    drawn.height > viewBox[3] * 0.1,
-    `route height ${Math.round(drawn.height)} of ${viewBox[3]}`,
-  )
-  check(
-    'the route uses the width it is given',
-    Boolean(routeBox) && routeBox.width > viewBox[2] * 0.25,
-    routeBox ? `route width ${Math.round(routeBox.width)} of ${viewBox[2]}` : 'no bbox',
-  )
-  check(
-    'the map is framed with real coordinates',
-    container.querySelectorAll('.map__graticule line').length >= 2,
+    container.querySelectorAll('.map__stop, .map__marker').length >= 2,
+    `${container.querySelectorAll('.map__stop').length} stops, ${container.querySelectorAll('.map__marker').length} ends`,
   )
   check(
     'each mode keeps its own line treatment',
-    Boolean(
-      paths.find((path) => (path.getAttribute('stroke-dasharray') || '') !== '') ||
-        container.querySelector('.map__route-casing'),
-    ),
+    paths.some((path) => path.getAttribute('stroke-dasharray')) &&
+      paths.some((path) => !path.getAttribute('stroke-dasharray')),
+    'walking is dotted, vehicles are solid',
   )
+  check('the map states its scale', Boolean(container.querySelector('.map__scale-text')?.textContent))
+
+  // ---- moving and zooming -------------------------------------------------
+  const zoomBefore = Number(mapNode?.getAttribute('data-map-zoom') ?? 0)
+  const zoomIn = container.querySelector('button[aria-label="Zoom in"]')
+  const zoomOut = container.querySelector('button[aria-label="Zoom out"]')
+  const fit = container.querySelector('button[aria-label="Fit the route"]')
+  check('the map has zoom controls', Boolean(zoomIn && zoomOut && fit))
+  if (zoomIn && zoomOut) {
+    await click(zoomIn)
+    await settle(150)
+    const zoomedIn = Number(mapNode?.getAttribute('data-map-zoom') ?? 0)
+    await click(zoomOut)
+    await settle(150)
+    const zoomedOut = Number(mapNode?.getAttribute('data-map-zoom') ?? 0)
+    check(
+      'zooming in makes the map closer',
+      zoomedIn > zoomBefore,
+      `${zoomBefore} -> ${zoomedIn}`,
+    )
+    check('zooming out backs it off again', zoomedOut < zoomedIn, `${zoomedIn} -> ${zoomedOut}`)
+  }
+
+  // ---- satellite and terrain ---------------------------------------------
+  const styleButtons = Array.from(container.querySelectorAll('.map__style-btn'))
+  check(
+    'the map offers more than one way to look at the world',
+    styleButtons.length >= 3,
+    styleButtons.map((b) => b.textContent.trim()).join(' · '),
+  )
+  const satellite = styleButtons.find((b) => /satellite/i.test(b.getAttribute('aria-label') || ''))
+  const terrain = styleButtons.find((b) => /terrain/i.test(b.getAttribute('aria-label') || ''))
+  check('there is a satellite option', Boolean(satellite))
+  check('there is a terrain option', Boolean(terrain))
+
+  const tileHost = () =>
+    container.querySelector('.leaflet-tile-pane img')?.getAttribute('src') || ''
+  if (satellite) {
+    await click(satellite)
+    await settle(200)
+    check(
+      'choosing satellite swaps in imagery',
+      tileHost().includes('arcgisonline') &&
+        mapNode?.getAttribute('data-map-basemap') === 'satellite',
+      `${tileHost().slice(0, 70)} (basemap ${mapNode?.getAttribute('data-map-basemap')})`,
+    )
+    check(
+      'the imagery is credited too',
+      /Esri/.test(container.querySelector('.map__attribution')?.textContent || ''),
+      container.querySelector('.map__attribution')?.textContent,
+    )
+  }
+  if (terrain) {
+    await click(terrain)
+    await settle(200)
+    check(
+      'choosing terrain swaps in relief',
+      tileHost().includes('opentopomap'),
+      tileHost().slice(0, 70),
+    )
+    await click(styleButtons[0])
+    await settle(150)
+  }
+
+  // ---- the whole network --------------------------------------------------
+  const networkPaths = await waitFor('.map__network', 40)
+  check(
+    'every route in the network can be drawn',
+    networkPaths.length >= 40,
+    `${networkPaths.length} network lines (83 modelled routes)`,
+  )
+  const layerToggle = container.querySelector('.map__layer-toggle')
+  check('the map offers the whole network as a layer', Boolean(layerToggle))
+  if (layerToggle) {
+    check(
+      'the layer says how many routes it is showing',
+      /\d+ routes/.test(layerToggle.textContent),
+      layerToggle.textContent.trim(),
+    )
+    await click(layerToggle)
+    await settle(150)
+    check(
+      'turning the network off leaves the journey',
+      container.querySelectorAll('.map__network').length === 0 &&
+        container.querySelectorAll('path.map__route').length > 0,
+    )
+    await click(layerToggle)
+    await settle(150)
+  }
+
   check('the bottom sheet is present', container.querySelector('.sheet') !== null)
   check(
     'the sheet names the journey',

@@ -26,6 +26,7 @@ features and national-scale deployment are deliberately out of scope (see
 | Ranking | Seven traveller preferences, four normalised criteria, archetype labelling (Cheapest, Fastest, Fewest changes, Least walking, Lowest emissions, Best value, Step-free) |
 | Walking | A 15-minute promise by default, a stated limit the traveller can tighten (10 / 15 / 20 minutes), and longer walks returned as a labelled choice rather than as the answer |
 | API | 25 endpoints over FastAPI, OpenAPI documented at `/api/docs` |
+| Map | A real slippy map — OpenStreetMap streets, Esri satellite imagery or OpenTopoMap relief, pannable and zoomable by touch, wheel and buttons — with the journey drawn over it through every stop it calls at, and every one of the 83 modelled routes underneath |
 | App | React + TypeScript, built mobile-first: Home, Results, Journey details, Live, Cheapest/Fastest, price comparison, Saved places, Trips, Price alerts, Profile and Data — a map-first layout with a draggable sheet and a bottom nav, drawn from real coordinates with no map tile dependency |
 | Quality | 171 tests covering ingestion, the compiler, the graph, the engine, fares, ranking and every endpoint, plus a DOM render test that mounts the real app against the real API |
 
@@ -77,6 +78,29 @@ The API serves the built SPA from `frontend/dist` when it exists, so a single
 process can serve the whole product in a deployment.
 
 ---
+
+## The map
+
+The base map is not drawn by MoveIn: it is tiles from a real provider, because
+an engine that knows stops and coordinates has no business inventing coastlines.
+Three styles, switchable on the map itself:
+
+| Style | Tiles | Why |
+| --- | --- | --- |
+| Streets | OpenStreetMap | Every road, path and place name, and the only base that shows where the bus stops are |
+| Satellite | Esri World Imagery | Aerial photography, for seeing the street you are standing on |
+| Terrain | OpenTopoMap | Contours and relief, for the part of a journey that happens on foot |
+
+Everything drawn *on* the base is MoveIn's own data: the journey as the vehicle
+actually runs it — through every stop it calls at, in order, at its real
+coordinates — and, underneath it, all 83 modelled routes from
+`GET /api/network/map`. The map pans, pinches, scrolls and double-taps, and there
+are buttons for zoom and "fit the route" for anyone who would rather tap.
+
+Tiles are a third-party dependency and are treated as one: if they cannot be
+fetched, the map says so and keeps drawing the route over a plain background,
+because the route is the part that matters. Attribution for the provider in use
+is shown on the map, and moves with the style.
 
 ## Data: what is real and what is compiled
 
@@ -209,6 +233,7 @@ the feed plumbing is already built and tested.
 | POST | `/api/journeys/search` | **Plan a journey** — `preference`, `traveller`, `max_walk_minutes`, `limit`, `arrive_by`, and `options` (`modes`, `max_price`, `max_legs`, `step_free_only`) |
 | POST | `/api/journeys/compare-emissions` | Compare modes on one trip |
 | GET | `/api/network/summary` · `/operators` · `/routes` · `/coverage` | What the network contains, and how much of each city's real stop register it models |
+| GET | `/api/network/map` | Every route as the line it runs, as coordinates, for the map overlay |
 | GET | `/api/fares/products` · `/operators` | The fare table |
 | GET | `/api/live/vehicles` · `/alerts` | Where the vehicles are, what is disrupted |
 | POST | `/api/live/track` | Follow the journey you are on |
@@ -230,8 +255,6 @@ for a real authenticated user without changing any call site.
 ```bash
 .venv/bin/python -m pytest backend/tests -q     # the engine, the pipeline, every endpoint
 cd frontend && npm run test:render             # the app, rendered in a DOM and asserted on
-cd frontend && npm run map:preview             # write the journey map out as an SVG (API must be up)
-.venv/bin/python scripts/render_map_preview.py # ...and rasterise it, for looking at
 ```
 
 The render test mounts the real app in a DOM against the real API and walks the
@@ -245,12 +268,11 @@ It is also given a phone-sized frame, because jsdom has no layout: every element
 reports zero size unless a test says otherwise. That matters — the map sizes
 itself from its container, so a zero-sized frame is not a smaller version of the
 real thing, it is a different code path, and one that hid a map which never grew
-past its default height. The map is asserted on as geometry: that the route runs
-through the stops the vehicle calls at rather than straight past them, that it is
-drawn above the sheet rather than behind it, that it fills the frame it was
-given. `npm run map:preview` writes the same map out as an SVG (with
-`scripts/render_map_preview.py` to rasterise it), because a two-vertex line and a
-fourteen-vertex line pass the same DOM query, and only one of them is a route.
+past its default height. The map is asserted on as a map: real tiles from a real
+provider, the route running through the stops the vehicle calls at rather than
+straight past them, zoom buttons that change the zoom, satellite and terrain
+swapping the tile source and the attribution with it, and the whole network
+appearing under the journey as lines that can be switched off.
 
 The suite runs against the real compiled feed rather than a synthetic fixture,
 because the bugs worth catching are in the data: a corridor that does not

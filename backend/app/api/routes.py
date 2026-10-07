@@ -167,6 +167,65 @@ def data_sources(db: DbDep, planner: PlannerDep) -> dict:
     }
 
 
+@network.get("/map", summary="Every route, as the line it actually runs")
+def network_map(
+    planner: PlannerDep,
+    mode: str | None = Query(default=None, description="Only lines of this mode"),
+    region: str | None = Query(default=None, description="Only lines touching this region"),
+    precision: int = Query(default=5, ge=3, le=6, description="Decimal places for coordinates"),
+) -> dict:
+    """The whole modelled network as drawable polylines.
+
+    One line per route, each a list of the stops it calls at in order, at their
+    real coordinates -- so the map draws the service, not a straight line between
+    its ends.  Coordinates are rounded, because five decimal places is a metre
+    and nobody can see a metre on a phone.
+    """
+    features: list[dict] = []
+    for route_id in sorted(planner.graph.routes):
+        route = planner.graph.routes[route_id]
+        if mode and route.mode.value != mode:
+            continue
+        # A route's stops are the union of its patterns; the longest pattern is
+        # the one that shows where the line goes.
+        patterns = [p for p in planner.graph.patterns.values() if p.route_id == route_id]
+        if not patterns:
+            continue
+        longest = max(patterns, key=lambda p: len(p.stops))
+        coordinates: list[list[float]] = []
+        regions: set[str] = set()
+        for stop_id in longest.stops:
+            stop = planner.graph.stops.get(stop_id)
+            if stop is None:
+                continue
+            coordinates.append([round(stop.lat, precision), round(stop.lon, precision)])
+            if stop.region:
+                regions.add(stop.region)
+        if len(coordinates) < 2:
+            continue
+        if region and region not in regions:
+            continue
+        operator = get_operator(route.operator_code)
+        features.append(
+            {
+                "id": route.id,
+                "name": route.short_name or route.long_name or route.id,
+                "long_name": route.long_name,
+                "mode": route.mode.value,
+                "mode_label": route.mode.label,
+                "colour": f"#{route.colour.lstrip('#')}" if route.colour else "#4b5563",
+                "operator": operator.name if operator else route.operator_code,
+                "coordinates": coordinates,
+                "stops": len(coordinates),
+            }
+        )
+    return {
+        "count": len(features),
+        "features": features,
+        "attribution": "MoveIn modelled network: real NaPTAN stops and real operators, compiled timetable.",
+    }
+
+
 @network.get("/coverage", summary="How much of the real network is modelled")
 def network_coverage(planner: PlannerDep) -> dict:
     """What MoveIn models against what the country actually has.

@@ -195,6 +195,25 @@ export interface Journey {
   polyline: [number, number][]
 }
 
+export interface NetworkMapFeature {
+  id: string
+  name: string
+  long_name: string
+  mode: string
+  mode_label: string
+  colour: string
+  operator: string
+  /** The stops the route calls at, in order, as [lat, lon]. */
+  coordinates: [number, number][]
+  stops: number
+}
+
+export interface NetworkMapResponse {
+  count: number
+  features: NetworkMapFeature[]
+  attribution: string
+}
+
 export interface Preference {
   id: string
   label: string

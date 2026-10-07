@@ -904,3 +904,51 @@ def test_arrive_by_in_the_past_reports_the_deadline_it_missed(client):
 
     assert body["journeys"] == []
     assert body["notice"]["kind"] == "arrive_by"
+
+
+# ---------------------------------------------------------------------------
+# The map's data
+# ---------------------------------------------------------------------------
+
+
+def test_every_route_can_be_drawn(client):
+    """The map overlay is the whole network, not a sample of it."""
+    body = client.get("/api/network/map").json()
+
+    assert body["count"] >= 80
+    assert len(body["features"]) == body["count"]
+    for feature in body["features"]:
+        assert len(feature["coordinates"]) >= 2, f"{feature['id']} has no line to draw"
+        for lat, lon in feature["coordinates"]:
+            assert 49.0 < lat < 61.5, f"{feature['id']} has a latitude off the map: {lat}"
+            assert -8.5 < lon < 2.5, f"{feature['id']} has a longitude off the map: {lon}"
+
+
+def test_the_map_payload_is_small_enough_to_send(client):
+    """It is fetched on every results screen, so it has to be a small download."""
+    response = client.get("/api/network/map")
+
+    assert len(response.content) < 120_000, f"{len(response.content)} bytes for the overlay"
+
+
+def test_a_route_on_the_map_really_stops_where_it_stops(client):
+    """A line drawn through the wrong places is worse than no line."""
+    features = client.get("/api/network/map?mode=rail").json()["features"]
+    assert features
+    line = next(f for f in features if len(f["coordinates"]) > 3)
+
+    # The first drawable point is the first stop the pattern calls at, so there
+    # must be a modelled stop there -- a line that starts in a field is a bug.
+    first_lat, first_lon = line["coordinates"][0]
+    nearby = client.get(
+        "/api/stops/nearby",
+        params={"lat": first_lat, "lon": first_lon, "radius_m": 60, "limit": 5},
+    ).json()
+    assert nearby["stops"], f"no modelled stop within 60 m of {line['id']}'s first point"
+
+
+def test_the_map_can_be_asked_for_one_mode(client):
+    body = client.get("/api/network/map", params={"mode": "tram"}).json()
+
+    assert body["count"] > 0
+    assert {feature["mode"] for feature in body["features"]} == {"tram"}
