@@ -27,6 +27,11 @@ class TravellerIn(BaseModel):
 
 class SearchOptionsIn(BaseModel):
     max_legs: int | None = Field(default=None, ge=1, le=8)
+    #: Transit modes the traveller will use (``bus``, ``rail``, ``coach``,
+    #: ``tram``, ``metro``, ``taxi``, ``ridehail``, ``ferry``).  Omit for all.
+    modes: list[str] | None = Field(default=None, max_length=12)
+    #: Hard budget on the total fare, in pounds.
+    max_price: float | None = Field(default=None, ge=0, le=5000)
     step_free_only: bool = False
     #: How many half-hourly departure slots to explore from the requested time.
     departure_sweep: int | None = Field(default=None, ge=1, le=12)

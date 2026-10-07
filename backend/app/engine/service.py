@@ -20,7 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..config import Settings, get_settings
-from ..domain.models import Mode, Stop, TransportNetwork, uk_now
+from ..domain.models import Mode, Stop, TransportNetwork, to_uk_naive, uk_now
 from ..domain.network_spec import ALL_CORRIDORS, FareRule
 from ..domain.regions import REGIONS, REGIONS_BY_SLUG
 from ..ingest.geo import haversine_m, walk_distance_m, walk_duration_s, walk_time_to_distance_m
@@ -38,6 +38,10 @@ from .journeys import (
 from .search import Raptor, SearchOptions, SearchResult
 
 
+#: Placeholder names the register carries where a name is missing.
+NOT_A_NAME = frozenset({"na", "n/a", "unknown", "unnamed", "-", "--"})
+
+
 @dataclass
 class Place:
     """A resolved origin or destination."""
@@ -52,6 +56,12 @@ class Place:
     region: str = ""
     #: Any other stops the label could have meant.
     alternatives: list[dict] = field(default_factory=list)
+    #: False when this is a real stop that no modelled corridor calls at. The
+    #: traveller can still start or finish here -- they walk to the nearest
+    #: served stop -- but the answer should say so rather than pretend.
+    served: bool = True
+    #: For an unserved place: the closest stop that *is* served.
+    nearest_served: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -88,6 +98,84 @@ class JourneyPlanner:
         self._name_index: list[tuple[str, Stop]] = [
             (_normalise_stop_name(s.name).lower(), s) for s in net.stops.values()
         ]
+        # Every real named NaPTAN stop we hold, so a traveller can start or end
+        # anywhere the data knows about -- not only at the 400-odd stops a
+        # modelled corridor happens to call at.  MoveIn is honest about which
+        # is which (see Place.served).
+        self._all_stops: list[tuple[str, str, float, float, str, str, float]] = []
+        self._load_named_stops()
+
+    # -- stops -------------------------------------------------------------
+    def _load_named_stops(self) -> None:
+        """Index the real NaPTAN named stops, tidied for search.
+
+        These are the stops the country actually has -- tens of thousands of
+        them -- against the few hundred a compiled corridor calls at.  Reading
+        them costs a few megabytes and turns "no match" into "that stop is real,
+        here is where it is, and here is the nearest stop we serve".
+        """
+        from ..ingest.network_compiler import display_stop_name
+
+        path = self.settings.data_raw_dir / "naptan_named_stops.csv"
+        if not path.exists():
+            return
+        import csv
+
+        served = {s.name.lower() for s in self.graph.stops.values()}
+        radius_m = self.settings.named_stop_radius_m
+        with path.open(encoding="utf-8") as handle:
+            for row in csv.DictReader(handle):
+                name = (row.get("name") or "").strip()
+                try:
+                    lat, lon = float(row["lat"]), float(row["lon"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not name or name.casefold() in NOT_A_NAME or name.lower() in served:
+                    continue
+                # Anchor every stop to the region it is nearest, and keep only
+                # the ones near a modelled network. The register is national and
+                # has no locality column, so without this "Sherwood" returns a
+                # stop in Luton: the region is the only disambiguator the data
+                # gives us, and it is derived from real coordinates.
+                region, distance = min(
+                    (
+                        (region, haversine_m(lat, lon, region.lat, region.lon))
+                        for region in REGIONS
+                    ),
+                    key=lambda pair: pair[1],
+                )
+                if distance > radius_m:
+                    continue
+                label = display_stop_name(name)
+                self._all_stops.append((
+                    _normalise_stop_name(label).lower(), label, lat, lon,
+                    region.name, region.slug, distance,
+                ))
+
+    @property
+    def named_stop_count(self) -> int:
+        """How many real named stops the planner can resolve."""
+        return len(self._all_stops)
+
+    def nearest_served_stop(self, lat: float, lon: float) -> dict | None:
+        """The closest stop a modelled corridor actually calls at."""
+        best: tuple[float, Stop] | None = None
+        for stop in self.graph.stops.values():
+            distance = walk_distance_m(lat, lon, stop.lat, stop.lon)
+            if best is None or distance < best[0]:
+                best = (distance, stop)
+        if best is None:
+            return None
+        minutes = max(1, round(walk_duration_s(best[0]) / 60))
+        return {
+            "name": best[1].name,
+            "id": best[1].id,
+            "distance_m": round(best[0]),
+            "walk_minutes": minutes,
+            # Beyond a plausible walk it is not "the nearest stop", it is "no
+            # stop": saying "83 min walk" would be worse than saying nothing.
+            "reachable": minutes <= self.settings.max_walk_s // 60,
+        }
 
     # -- places ------------------------------------------------------------
     def resolve_place(self, query: str, *, near: tuple[float, float] | None = None) -> Place | None:
@@ -159,6 +247,41 @@ class JourneyPlanner:
                 kind="stop", mode=stop.mode.value, region=stop.region,
                 alternatives=self._alternatives(prefix, stop),
             )
+
+        # A real stop that no modelled corridor calls at.  It is still a place
+        # the traveller can start or finish at -- the walk to the nearest served
+        # stop appears in the itinerary -- but the answer says it is off-network
+        # rather than quietly planning from somewhere else.
+        named = [entry for entry in self._all_stops if entry[0] == key] or [
+            entry for entry in self._all_stops if entry[0].startswith(key)
+        ]
+        if named:
+            if near is not None:
+                chosen = min(
+                    named, key=lambda e: walk_distance_m(near[0], near[1], e[2], e[3])
+                )
+            else:
+                # No hint, so prefer the candidate closest to a town MoveIn
+                # models: the register is national and the alternative is
+                # answering a Nottinghamshire query with a stop in Luton.
+                chosen = min(
+                    named,
+                    key=lambda e: min(
+                        haversine_m(e[2], e[3], region.lat, region.lon)
+                        for region in REGIONS
+                    ),
+                )
+            return Place(
+                id=f"naptan:{chosen[5]}:{chosen[1].lower().replace(' ', '-')}",
+                label=chosen[1],
+                lat=chosen[2],
+                lon=chosen[3],
+                kind="stop",
+                mode="",
+                region=chosen[5],
+                served=False,
+                nearest_served=self.nearest_served_stop(chosen[2], chosen[3]) or {},
+            )
         return None
 
     def _best_stop(self, stops: list[Stop], near: tuple[float, float] | None) -> Stop:
@@ -220,8 +343,28 @@ class JourneyPlanner:
                     interchange=True,
                     source="region",
                 )))
-        # Rank by quality, then prefer interchanges, then shorter names.
-        scored.sort(key=lambda t: (t[0], 0 if t[2].interchange else 1, len(t[2].name)))
+        for name, label, lat, lon, _region_name, region_slug, region_distance in self._all_stops:
+            quality = None
+            if name == key:
+                quality = 0
+            elif name.startswith(key) and (
+                len(name) == len(key) or not name[len(key)].isalpha()
+            ):
+                quality = 1
+            elif key in name:
+                quality = 2
+            if quality is None:
+                continue
+            scored.append((quality + 3, int(region_distance / 1000), Stop(
+                id=f"naptan:{region_slug}:{label.lower().replace(' ', '-')}",
+                name=label, lat=lat, lon=lon, mode=Mode.BUS,
+                region=region_slug, interchange=False, source="naptan",
+            )))
+
+        # Rank by how well the name matches, then by how close the stop is to a
+        # region MoveIn models -- "Sherwood" exists in several counties, and the
+        # one that matters is the one in the city the traveller is looking at.
+        scored.sort(key=lambda t: (t[0], t[1], 0 if t[2].interchange else 1, len(t[2].name)))
         out: list[dict] = []
         seen: set[str] = set()
         for _quality, _kind, stop in scored:
@@ -229,7 +372,8 @@ class JourneyPlanner:
             if dedupe in seen:
                 continue
             seen.add(dedupe)
-            out.append({
+            served = stop.id in self.graph.stops
+            entry = {
                 "id": stop.id,
                 "name": stop.name,
                 "mode": "town" if stop.id.startswith("region:") else stop.mode.value,
@@ -237,7 +381,14 @@ class JourneyPlanner:
                 "lat": round(stop.lat, 6),
                 "lon": round(stop.lon, 6),
                 "interchange": stop.interchange,
-            })
+                # Every real stop is findable; not every real stop is on a
+                # modelled corridor. Saying which is which is the difference
+                # between a gap and a lie.
+                "served": served or stop.id.startswith(("region:", "coord:")),
+            }
+            if not entry["served"]:
+                entry["nearest_served"] = self.nearest_served_stop(stop.lat, stop.lon) or {}
+            out.append(entry)
             if len(out) >= limit:
                 break
         return out
@@ -260,6 +411,9 @@ class JourneyPlanner:
         max_access_walk_m: int | None = None,
         limit: int | None = None,
         max_walk_s: int | None = None,
+        allowed_modes: set[str] | None = None,
+        max_price: float | None = None,
+        latest_arrival: datetime | None = None,
     ) -> PlanResult:
         settings = self.settings
         if isinstance(preference, str):
@@ -281,8 +435,15 @@ class JourneyPlanner:
             }
             return result
 
+        # Whether the traveller named a departure matters: "leave at eight" means
+        # the eight o'clock trains, and a search that quietly moves them to
+        # 17:51 to satisfy a deadline is not answering the question they asked.
+        explicit_departure = departure is not None
         if departure is None:
             departure = uk_now().replace(second=0, microsecond=0)
+        departure = to_uk_naive(departure)
+        if latest_arrival is not None:
+            latest_arrival = to_uk_naive(latest_arrival)
         result.departure = departure
 
         service_day = departure.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -301,6 +462,24 @@ class JourneyPlanner:
         # The time budget and the distance budgets are the same promise made in
         # two units, so the tighter of the two always wins.
         access_walk_m = int(min(access_walk_m, walk_budget_m))
+
+        # If the traveller typed a stop no modelled route calls at, the walk to
+        # the nearest served stop is not a mistake to be filtered out -- it is
+        # the answer to the question they asked. Allow it up to the app's own
+        # ceiling rather than the per-mode access limit.
+        off_network = []
+        if origin_place.served is False:
+            off_network.append("origin")
+        if dest_place.served is False:
+            off_network.append("destination")
+        access_walk_widened_m = 0
+        if off_network:
+            # Spend the whole walk budget on reaching the nearest served stop:
+            # it is the only way out of the place they named.
+            widened = int(min(walk_budget_m, max(settings.max_access_walk_m, walk_budget_m)))
+            if widened > access_walk_m:
+                access_walk_widened_m = widened
+                access_walk_m = widened
         options = SearchOptions(
             max_legs=max_legs or settings.max_legs,
             max_access_walk_m=access_walk_m,
@@ -314,6 +493,8 @@ class JourneyPlanner:
             departure_sweep=departure_sweep or settings.departure_sweep,
             max_walk_s=walk_budget_s,
             comfortable_walk_s=settings.comfortable_walk_s,
+            per_mode_access_limit=not off_network,
+            allowed_modes=frozenset(allowed_modes) if allowed_modes else None,
         )
 
         origin_point = (origin_place.lat, origin_place.lon)
@@ -342,10 +523,34 @@ class JourneyPlanner:
         sweeps: list[int] = [base_s]
         for i in range(1, max(1, options.departure_sweep)):
             sweeps.append(base_s + i * 1800)
+        if latest_arrival is not None and not explicit_departure:
+            # "I must be there by six" is a different question from "I am leaving
+            # now": it is answered by looking at the departures that could still
+            # make it, not only at the ones after the current minute.  When a
+            # departure *is* given, the traveller has already answered that.
+            if latest_arrival.date() != departure.date():
+                # A different service day: search from the traveller's stated
+                # departure instead of pretending the clocks line up.
+                pass
+            else:
+                latest_s = latest_arrival.hour * 3600 + latest_arrival.minute * 60
+                for offset in (3600, 7200, 10800, 14400):
+                    candidate = latest_s - offset
+                    if candidate > 0:
+                        sweeps.append(candidate)
+        sweeps = sorted({sweep for sweep in sweeps if sweep >= 0})
 
         collected: list[Journey] = []
         diagnostics: dict = {
             "sweeps": len(sweeps),
+            **(
+                {
+                    "off_network": off_network,
+                    "access_walk_widened_m": access_walk_widened_m,
+                }
+                if off_network
+                else {}
+            ),
             "rounds": 0,
             "stops_scanned": 0,
             "search_ms": 0,
@@ -403,6 +608,18 @@ class JourneyPlanner:
                         continue
                     seen_signatures.add(signature)
                     collected.append(journey)
+
+        # A budget and a deadline are the traveller's, not the app's: journeys
+        # that miss them are dropped, and the count is kept so the answer can
+        # say that is what happened rather than looking like an empty network.
+        if max_price is not None:
+            kept = [j for j in collected if j.fare.total <= max_price + 0.005]
+            diagnostics["over_budget"] = len(collected) - len(kept)
+            collected = kept
+        if latest_arrival is not None:
+            kept = [j for j in collected if j.arrival <= latest_arrival]
+            diagnostics["late_arrivals"] = len(collected) - len(kept)
+            collected = kept
 
         # Keep the best-ranked handful of distinct options.
         ranked = self.ranker.rank(collected, preference)

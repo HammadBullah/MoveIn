@@ -236,6 +236,8 @@ class SearchOptions:
 
     max_legs: int = 5
     max_access_walk_m: int = 2000
+    #: Waive the per-mode walk-to-stop limit at an end the traveller named.
+    per_mode_access_limit: bool = True
     max_transfer_walk_m: int = 900
     #: How many different departures to ride simultaneously out of one stop.
     #: More than one keeps both the earliest and the cheapest option alive.
@@ -255,6 +257,10 @@ class SearchOptions:
     #: treats a long walk as a decision the traveller makes, not one made for
     #: them, so this is a hard ceiling that the request can tighten.
     max_walk_s: int | None = None
+    #: Transit modes the traveller will use, by ``Mode`` value.  ``None`` means
+    #: every mode is allowed; walking is always allowed, because refusing to
+    #: walk does not remove the walk from the pavement.
+    allowed_modes: frozenset[str] | None = None
     #: Walking beyond this stops being a stroll and starts being the reason a
     #: journey was rejected.  Journeys that cross it are returned, labelled, and
     #: kept out of the headline trade-offs unless nothing else competes.
@@ -310,10 +316,12 @@ class Raptor:
         options = options or SearchOptions()
 
         origins = self.graph.stops_near(
-            origin[0], origin[1], options.max_access_walk_m, limit=12
+            origin[0], origin[1], options.max_access_walk_m, limit=12,
+            per_mode_limit=options.per_mode_access_limit,
         )
         destinations = self.graph.stops_near(
-            destination[0], destination[1], options.max_access_walk_m, limit=12
+            destination[0], destination[1], options.max_access_walk_m, limit=12,
+            per_mode_limit=options.per_mode_access_limit,
         )
         result = SearchResult(
             origin_point=origin,
@@ -353,7 +361,10 @@ class Raptor:
                 )
             )
 
-        if options.allow_on_demand:
+        if options.allow_on_demand and (
+            options.allowed_modes is None
+            or {"taxi", "ridehail"} & set(options.allowed_modes)
+        ):
             self._seed_on_demand(origin, destinations, departure_s, result, frontier)
 
         marked = set(frontier.keys())
@@ -452,6 +463,11 @@ class Raptor:
             # One tariff, one place: the meter lives in the fare engine, so a
             # taxi quoted here costs the same as a taxi priced anywhere else.
             for code, mode in (("TAXI", Mode.TAXI), ("UBER", Mode.RIDEHAIL)):
+                if (
+                    options.allowed_modes is not None
+                    and mode.value not in options.allowed_modes
+                ):
+                    continue
                 tariff = MODE_TARIFFS[mode]
                 fare_p = int(
                     round((tariff.base + tariff.rate_per_km * road_m / 1000) * 100)
@@ -499,6 +515,13 @@ class Raptor:
 
         for pattern_key, stops_and_positions in boardings.items():
             pattern = self.graph.patterns[pattern_key]
+            if (
+                options.allowed_modes is not None
+                and pattern.mode.value not in options.allowed_modes
+            ):
+                # The traveller said which modes they will use.  Riding a mode
+                # they excluded is not an alternative, it is a different journey.
+                continue
             rule = self.fare_rules.get(pattern.route_id)
 
             # The labels worth boarding from, per stop on this pattern.

@@ -1,0 +1,252 @@
+import { useEffect, useMemo, useState } from 'react'
+import { Button, Section } from '../components/Controls'
+import { Icon, ModeIcon } from '../components/Icons'
+import { MapCanvas } from '../components/MapCanvas'
+import { modeColour, modeLabel } from '../lib/format'
+import { api } from '../lib/api'
+import type { Journey, Leg, LiveAlert, TrackResponse } from '../lib/types'
+
+function minutesUntil(value: string | undefined | null): number | null {
+  if (!value) return null
+  const stamp = Date.parse(value)
+  if (Number.isNaN(stamp)) return null
+  return Math.round((stamp - Date.now()) / 60000)
+}
+
+/**
+ * The screen for once the traveller is on their way.
+ *
+ * A journey planner normally stops being useful the moment it is followed, so
+ * this screen exists to keep being useful: where they are, what happens next,
+ * and — when something goes wrong — what the alternatives are, without making
+ * them start the search again.
+ */
+export function LiveScreen({
+  journey,
+  onBack,
+  onSwitch,
+  onOpenJourney,
+}: {
+  journey: Journey
+  onBack: () => void
+  onSwitch: (journey: Journey) => void
+  onOpenJourney: (journey: Journey) => void
+}) {
+  const [track, setTrack] = useState<TrackResponse | null>(null)
+  const [alerts, setAlerts] = useState<LiveAlert[]>([])
+  const [alternatives, setAlternatives] = useState<Journey[]>([])
+  const [switching, setSwitching] = useState(false)
+  const firstLeg: Leg | undefined = journey.legs[0]
+
+  useEffect(() => {
+    api
+      .track({
+        journey_id: journey.id,
+        payload: journey,
+        preference: 'best_value',
+      })
+      .then(setTrack)
+      .catch(() => setTrack(null))
+  }, [journey])
+
+  useEffect(() => {
+    api
+      .liveAlerts()
+      .then((response) => setAlerts(response.alerts))
+      .catch(() => setAlerts([]))
+  }, [])
+
+  const steps = useMemo(() => {
+    const now = Date.now()
+    return journey.legs.map((leg, index) => {
+      const from = leg.kind === 'walk' ? leg.start_time : leg.departure
+      const to = leg.kind === 'walk' ? leg.end_time : leg.arrival
+      const start = from ? Date.parse(from) : Number.NaN
+      const end = to ? Date.parse(to) : Number.NaN
+      const done = !Number.isNaN(end) && end < now
+      const active = !done && !Number.isNaN(start) && start <= now
+      return {
+        index,
+        leg,
+        done,
+        active,
+        title:
+          leg.kind === 'walk'
+            ? `Walk to ${leg.to.name}`
+            : leg.kind === 'on_demand'
+              ? `${modeLabel(leg.mode)} to ${leg.to.name}`
+              : `Board ${leg.route_name ?? modeLabel(leg.mode)}`,
+        detail:
+          leg.kind === 'walk'
+            ? `${Math.round((leg.distance_m ?? 0) / 10) * 10} m`
+            : `${leg.from.name} → ${leg.to.name}`,
+      }
+    })
+  }, [journey])
+
+  const activeStep = steps.find((step) => step.active) ?? steps.find((step) => !step.done) ?? steps[steps.length - 1]
+  const nextIn = minutesUntil(
+    activeStep?.leg.kind === 'walk' ? activeStep.leg.start_time : activeStep?.leg.departure,
+  )
+  const relevantAlert = alerts.find(
+    (alert) =>
+      alert.severity !== 'info' &&
+      (alert.route_ids?.some((id) => journey.legs.some((leg) => leg.route_id === id)) ||
+        alert.mode === activeStep?.leg.mode),
+  )
+
+  const switchJourney = async () => {
+    setSwitching(true)
+    try {
+      const response = await api.search({
+        origin: journey.legs[0]?.from.name ?? '',
+        destination: journey.legs[journey.legs.length - 1]?.to.name ?? '',
+        preference: 'fastest',
+        max_walk_minutes: 20,
+        limit: 4,
+      })
+      const others = response.journeys.filter((option) => option.id !== journey.id)
+      setAlternatives(others)
+    } catch {
+      setAlternatives([])
+    } finally {
+      setSwitching(false)
+    }
+  }
+
+  return (
+    <div className="screen screen--live">
+      <div className="results__map">
+        <MapCanvas journey={journey} height={300} live />
+        <button type="button" className="map__back" onClick={onBack} aria-label="Back">
+          <Icon name="back" size={20} />
+        </button>
+      </div>
+
+      <div className="card live__head">
+        <span className="live__pill">
+          <span className="live__pulse" aria-hidden />
+          Live
+        </span>
+        <h2>You’re on your way</h2>
+        <p className="muted small">
+          Arriving {journey.arrival_time ? journey.arrival_time.slice(11, 16) : '--:--'} ·{' '}
+          {journey.summary}
+        </p>
+      </div>
+
+      {activeStep && (
+        <div className="card live__next">
+          <span className="live__next-icon" style={{ color: modeColour(activeStep.leg.mode) }}>
+            <ModeIcon mode={activeStep.leg.mode} size={22} />
+          </span>
+          <div className="live__next-body">
+            <em>Next</em>
+            <strong>{activeStep.title}</strong>
+            <span>{activeStep.detail}</span>
+          </div>
+          <div className="live__next-eta">
+            {nextIn !== null && nextIn > -1 ? (
+              <>
+                <strong>{nextIn}</strong>
+                <em>min</em>
+              </>
+            ) : (
+              <>
+                <strong>now</strong>
+                <em>&nbsp;</em>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <Section title="Steps">
+        <div className="card card--list">
+          {steps.map((step) => (
+            <div
+              key={step.index}
+              className={`step${step.done ? ' step--done' : ''}${step.active ? ' step--active' : ''}`}
+            >
+              <span className="step__mark">
+                {step.done ? <Icon name="check" size={14} /> : step.active ? <span className="step__dot" /> : null}
+              </span>
+              <span className="step__body">
+                <strong>{step.title}</strong>
+                <em>{step.detail}</em>
+              </span>
+              <span className="step__time">
+                {(step.leg.kind === 'walk' ? step.leg.start_time : step.leg.departure)?.slice(11, 16)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      {track && track.legs?.some((leg) => leg.delay_s > 60) && (
+        <div className="card disruption">
+          <header className="disruption__head">
+            <Icon name="alert" size={18} />
+            <strong>
+              {track.legs.find((leg) => leg.delay_s > 60)?.route_name} is delayed by{' '}
+              {track.legs.find((leg) => leg.delay_s > 60)?.delay_label}
+            </strong>
+          </header>
+          <p className="muted small">{track.advice}</p>
+          <Button variant="primary" icon="swap" onClick={switchJourney} disabled={switching}>
+            {switching ? 'Finding an alternative…' : 'Switch journey'}
+          </Button>
+        </div>
+      )}
+
+      {relevantAlert && (
+        <div className="card disruption">
+          <header className="disruption__head">
+            <Icon name="alert" size={18} />
+            <strong>{relevantAlert.header}</strong>
+          </header>
+          <p className="muted small">{relevantAlert.description}</p>
+          <Button variant="primary" icon="swap" onClick={switchJourney} disabled={switching}>
+            {switching ? 'Finding an alternative…' : 'Switch journey'}
+          </Button>
+        </div>
+      )}
+
+      {alternatives.length > 0 && (
+        <Section title="Alternative journeys">
+          <div className="card card--list">
+            {alternatives.map((option) => (
+              <div key={option.id} className="alt">
+                <span className="alt__body">
+                  <strong>
+                    {option.mode_label} · {option.price_label}
+                  </strong>
+                  <em>
+                    {option.duration_label} · arrives {option.arrival_time?.slice(11, 16)}
+                  </em>
+                </span>
+                <Button size="sm" onClick={() => onSwitch(option)}>
+                  Switch
+                </Button>
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => onOpenJourney(option)}
+                >
+                  Details
+                </button>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {firstLeg && (
+        <p className="muted tiny live__note">
+          Live positions come from operator feeds where MoveIn can reach them; offline, the times
+          shown are the timetabled ones.
+        </p>
+      )}
+    </div>
+  )
+}

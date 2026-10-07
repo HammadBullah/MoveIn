@@ -1,4 +1,5 @@
 import type {
+  CoverageResponse,
   DataSourcesResponse,
   LiveAlert,
   LiveVehicle,
@@ -90,6 +91,8 @@ export const api = {
 
   networkSummary: () => request<NetworkSummary>('/network/summary'),
 
+  networkCoverage: () => request<CoverageResponse>('/network/coverage'),
+
   searchStops: (q: string, limit = 10) =>
     request<{ query: string; count: number; results: StopSuggestion[] }>(
       `/stops/search?q=${encodeURIComponent(q)}&limit=${limit}`,
@@ -108,8 +111,11 @@ export const api = {
     origin: string
     destination: string
     departure?: string | null
+    /** The traveller must be there by this time. */
+    arrive_by?: string | null
     preference: string
     traveller?: Record<string, unknown>
+    /** Journey-level knobs: allowed modes, budgets, changes. */
     options?: Record<string, unknown>
     /** Longest walk, in minutes, the traveller will accept in one go. */
     max_walk_minutes?: number | null

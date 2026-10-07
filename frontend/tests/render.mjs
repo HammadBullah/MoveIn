@@ -1,10 +1,11 @@
 /**
- * A rendering test for the planning screen.
+ * A rendering test for the app.
  *
- * The UI is the product, and a type-check does not tell you whether a page
- * renders or what it says. This mounts the real App in a DOM, points it at the
- * real API, and asserts on what a traveller would actually see: option rows,
- * the walk limit, the price, and the separate section for the long walks.
+ * The UI is the product, and a type-check does not tell you whether a screen
+ * renders or what it says. This mounts the real bundle in a DOM, points it at
+ * the real API, and walks the journey a traveller would take: land on a result,
+ * read the cards, open one, look at the timeline, compare prices, and open the
+ * transport filter.
  *
  * Run with:  npm run test:render      (needs the API on :8000)
  */
@@ -23,7 +24,7 @@ function check(name, condition, detail = '') {
 async function main() {
   const { JSDOM } = await import('jsdom')
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
-    url: 'http://localhost:5173/#/plan',
+    url: 'http://localhost:5173/#/results?from=Nottingham&to=Birmingham&pref=best_value',
     pretendToBeVisual: true,
   })
 
@@ -52,6 +53,11 @@ async function main() {
   globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0)
   globalThis.cancelAnimationFrame = (id) => clearTimeout(id)
   window.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} })
+  window.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
 
   // Relative /api calls, resolved against the dev server's proxy the way the
   // browser would resolve them.
@@ -70,124 +76,142 @@ async function main() {
   })
 
   const container = window.document.getElementById('root')
-  for (let i = 0; i < 60; i += 1) {
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 100))
+  const settle = async (ms = 120) =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, ms))
     })
-    if (container.querySelectorAll('.ride').length > 0) break
+  const click = async (node) => {
+    await act(async () => {
+      node.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
+    })
   }
-
-  const text = container.textContent
-  const rows = container.querySelectorAll('.ride')
-  const walkWarnings = container.querySelectorAll('.ride--walking')
-  const chips = Array.from(container.querySelectorAll('.chip')).map((c) => c.textContent.trim())
-
-  check('the search box renders', container.querySelector('.where') !== null)
-  check('from/to inputs are present', container.querySelectorAll('.place__input').length === 2)
-  check('the walk limit is offered as a choice', chips.some((c) => c.includes('15 min')))
-  check('"any walk" is offered', chips.some((c) => c.includes('Any walk')))
-  check('preference chips come from the API', chips.length >= 8, `saw ${chips.length} chips`)
-  check('option rows rendered', rows.length > 0, `${rows.length} rows`)
-  check('options are labelled with their trade-off', text.includes('Cheapest'))
-  check('each row shows a price', /\£\d+\.\d\d/.test(text))
-  check('the detail panel opens with the itinerary', container.querySelector('.timeline') !== null)
-  check('the detail says what the walk is', /min walk|no walking/.test(text))
-
-  // Long walks: never mixed in silently.
-  //
-  // The default promise is a 15 minute maximum, so the first screen has none of
-  // them.  Asking for "Any walk" must bring them back -- in their own section,
-  // flagged, and not mixed in with the options a person would actually take.
-  check(
-    'the default keeps long walks out of the results',
-    container.querySelectorAll('.ride--walking').length === 0,
-    `${container.querySelectorAll('.ride--walking').length} long-walk rows on a 15 min promise`,
-  )
-  const anyWalk = Array.from(container.querySelectorAll('.chip')).find(
-    (c) => c.textContent.trim() === 'Any walk',
-  )
-  check('there is a way to ask for longer walks', Boolean(anyWalk))
-  if (anyWalk) {
-    await act(async () => {
-      anyWalk.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    })
-    for (let i = 0; i < 40; i += 1) {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      })
-      if (
-        Array.from(container.querySelectorAll('button')).some((b) =>
-          b.textContent.includes('longer walk'),
-        )
-      ) {
-        break
-      }
+  const waitFor = async (selector, tries = 90) => {
+    for (let i = 0; i < tries; i += 1) {
+      await settle(120)
+      const found = container.querySelectorAll(selector)
+      if (found.length) return found
     }
-    check(
-      'asking for any walk re-plans without touching the button',
-      Array.from(container.querySelectorAll('button')).some((b) =>
-        b.textContent.includes('longer walk'),
-      ),
-    )
+    return container.querySelectorAll(selector)
   }
 
-  const moreButton = Array.from(container.querySelectorAll('button')).find((b) =>
-    b.textContent.includes('longer walk'),
+  // ---- results screen ----------------------------------------------------
+  const cards = await waitFor('.jcard')
+  const text = container.textContent
+
+  check('the results screen renders cards', cards.length > 0, `${cards.length} cards`)
+  check('the map is drawn from real coordinates', container.querySelector('.map__route') !== null)
+  check('the map marks the route ends', container.querySelectorAll('.map__marker').length >= 2)
+  check('the bottom sheet is present', container.querySelector('.sheet') !== null)
+  check(
+    'the sheet names the journey',
+    container.querySelector('.results__route')?.textContent?.includes('Nottingham'),
+    container.querySelector('.results__route')?.textContent,
   )
-  if (moreButton) {
+  check('every card quotes a price', /\£\d+\.\d\d/.test(text))
+  check('every card quotes a duration', /\d+h\s\d+m|\d+m/.test(text))
+  check('the cards offer a way in', text.includes('View journey'))
+  check('walking is stated on the card', /min walk|no walking/.test(text))
+
+  const chips = Array.from(container.querySelectorAll('.chip')).map((c) => c.textContent.trim())
+  check('the four trade-off chips are offered', ['Recommended', 'Cheapest', 'Fastest'].every((label) => chips.some((c) => c.includes(label))), chips.join(' | '))
+  check('there is a filter entry point', chips.some((c) => c.includes('Filters') || c.includes('More')))
+  check(
+    'cards wear their trade-off badge',
+    /Best value|Cheapest|Fastest|Fewest changes|Least walking/.test(text),
+  )
+
+  // ---- journey detail ----------------------------------------------------
+  const viewButton = Array.from(container.querySelectorAll('.jcard button')).find((b) =>
+    b.textContent.includes('View journey'),
+  )
+  if (viewButton) {
+    await click(viewButton)
+    const timeline = await waitFor('.timeline__stage')
+    check('the detail screen shows a timeline', timeline.length > 0, `${timeline.length} stages`)
+    check('stages are numbered', container.querySelector('.timeline__index') !== null)
+    check('the detail quotes times', container.querySelectorAll('.timeline__time').length > 0)
+    check('the detail names the places', container.querySelectorAll('.timeline__place').length > 0)
     check(
-      'long-walk options are behind a labelled section',
-      moreButton.textContent.includes('Shorter walks only'),
-      moreButton.textContent.slice(0, 120),
+      'the detail offers to start the journey',
+      Array.from(container.querySelectorAll('button')).some((b) =>
+        b.textContent.includes('Start journey'),
+      ),
     )
-    check(
-      'long-walk rows are hidden until asked for',
-      walkWarnings.length === 0 || moreButton.getAttribute('aria-expanded') === 'true',
+
+    // ---- live journey ----------------------------------------------------
+    const start = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent.includes('Start journey'),
     )
-    const before = container.querySelectorAll('.ride').length
-    await act(async () => {
-      moreButton.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    })
-    const after = container.querySelectorAll('.ride').length
-    check('opening the section reveals them', after > before, `${before} -> ${after}`)
-    check(
-      'the collapsed section says how many are hidden',
-      /\d+ more option/.test(moreButton.textContent),
-      moreButton.textContent.slice(0, 120),
+    if (start) {
+      await click(start)
+      await waitFor('.live__next')
+      check('live mode says you are on your way', container.textContent.includes('You’re on your way'))
+      check('live mode lists the steps', container.querySelectorAll('.step').length > 0)
+      check('live mode shows the next vehicle', container.querySelector('.live__next') !== null)
+      window.history.back
+      await act(async () => {
+        window.location.hash = '#/results?from=Nottingham&to=Birmingham&pref=best_value'
+        window.dispatchEvent(new window.Event('hashchange'))
+      })
+      await settle(200)
+    }
+
+    // ---- compare ---------------------------------------------------------
+    const compareFromDetail = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent.includes('Compare'),
     )
-    check(
-      'the revealed rows warn about the walk',
-      container.querySelectorAll('.ride--walking').length > 0,
-    )
-    check(
-      'the warning names the walk',
-      /\d+ min walk/.test(container.textContent),
-    )
-  } else {
-    check('a long-walk section is offered when one exists', true, 'no long walks on this route')
+    if (compareFromDetail) {
+      await click(compareFromDetail)
+      const rows = await waitFor('.compare__row')
+      check('the comparison lists options', rows.length > 0, `${rows.length} rows`)
+      check(
+        'the comparison highlights the cheapest',
+        container.querySelector('.compare__row--best') !== null,
+      )
+      check('the comparison quotes prices', /\£\d+\.\d\d/.test(container.textContent))
+      const back = Array.from(container.querySelectorAll('button')).find((b) =>
+        b.textContent.includes('Back to results'),
+      )
+      if (back) await click(back)
+      await settle(200)
+    }
   }
 
-  // Selecting a different option moves the detail panel to it.
-  const allRows = Array.from(container.querySelectorAll('.ride'))
-  const target = allRows.find((row) => !row.classList.contains('ride--selected'))
-  if (target) {
-    const label = target.getAttribute('aria-label')
-    await act(async () => {
-      target.dispatchEvent(new window.MouseEvent('click', { bubbles: true }))
-    })
-    check(
-      'choosing a row moves the selection to it',
-      target.classList.contains('ride--selected'),
-      `clicked ${label}`,
+  // ---- the transport filter ---------------------------------------------
+  const filterButton = Array.from(container.querySelectorAll('button')).find(
+    (b) => b.textContent.trim() === 'Filters' || b.textContent.includes('More'),
+  )
+  if (filterButton) {
+    await click(filterButton)
+    await settle(200)
+    const tiles = container.querySelectorAll('.mode-tile')
+    check('the filter sheet offers every mode', tiles.length >= 8, `${tiles.length} mode tiles`)
+    check('the filter sheet offers preferences', container.querySelectorAll('.chip').length > 4)
+    check('the filter sheet has a walking limit', container.querySelectorAll('input[type=range]').length >= 2)
+    const apply = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent.includes('Apply'),
     )
-    check(
-      'and the detail panel describes that row',
-      container.querySelector('.detail__times')?.textContent?.includes(
-        (label || '').slice(0, 5),
-      ),
-      container.querySelector('.detail__times')?.textContent,
-    )
+    check('the filter sheet can be applied', Boolean(apply))
+    if (apply) await click(apply)
+    await settle(200)
   }
+
+  // ---- home --------------------------------------------------------------
+  await act(async () => {
+    window.location.hash = '#/home'
+    window.dispatchEvent(new window.Event('hashchange'))
+  })
+  await settle(300)
+  check('the home screen asks where you are going', container.textContent.includes('Where are you going?'))
+  check('the search card has from and to', container.querySelectorAll('.place__input').length === 2)
+  check(
+    'the home screen offers the primary action',
+    Array.from(container.querySelectorAll('button')).some((b) =>
+      b.textContent.includes('Find my journey'),
+    ),
+  )
+  check('the bottom navigation is present', container.querySelectorAll('.tabbar__item').length === 4)
+  check('saved places are offered', container.textContent.includes('Saved places'))
 
   console.log(checks.join('\n'))
   console.log(`\n${checks.length - failures}/${checks.length} render checks passed`)

@@ -34,6 +34,35 @@ export interface StopSuggestion {
   interchange?: boolean
   distance_m?: number
   route_count?: number
+  /** False for a real stop no modelled corridor calls at. */
+  served?: boolean
+  nearest_served?: {
+    name?: string
+    id?: string
+    distance_m?: number
+    walk_minutes?: number
+    reachable?: boolean
+  }
+}
+
+export interface CoverageRow {
+  region: string
+  name: string
+  real_stops_held: number
+  modelled_stops: number
+  coverage_pct: number | null
+  routes: number
+  operators: number
+}
+
+export interface CoverageResponse {
+  headline: string
+  named_stops_held: number
+  named_stops_searchable: number
+  modelled_stops: number
+  modelled_routes: number
+  regions: CoverageRow[]
+  note: string
 }
 
 export interface OperatorRef {

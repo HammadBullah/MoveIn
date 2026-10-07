@@ -289,8 +289,11 @@ def fare_payload(fare: FareBreakdown | None) -> dict:
     }
 
 
-def walk_minutes(seconds: int) -> int:
-    """Walk time in whole minutes, rounded up: part of a minute is a minute."""
+def walk_minutes(distance_m: float) -> int:
+    """Walking minutes for a distance, rounded up: part of a minute is a minute."""
+    from ..ingest.geo import walk_duration_s
+
+    seconds = walk_duration_s(distance_m)
     return max(1, math.ceil(seconds / 60)) if seconds else 0
 
 
@@ -303,7 +306,7 @@ def _walk_label(seconds: int) -> str:
     """
     if not seconds:
         return "no walking"
-    return f"{walk_minutes(seconds)} min walk"
+    return f"{max(1, math.ceil(seconds / 60))} min walk"
 
 
 def journey_payload(

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from datetime import datetime, timedelta
 
 import pytest
@@ -541,10 +543,13 @@ def test_walk_labels_round_up(planner):
     """616 seconds is an 11 minute walk, not a 10 minute one."""
     from backend.app.api.serializers import _walk_label, walk_minutes
 
-    assert walk_minutes(590) == 10
-    assert walk_minutes(600) == 10
-    assert walk_minutes(601) == 11
-    assert walk_minutes(616) == 11
-    assert walk_minutes(0) == 0
+    # Distances in, whole minutes out, rounded up -- never down.
+    from backend.app.ingest.geo import walk_duration_s
+
+    for distance in (0, 10, 640, 810, 811, 1_350, 2_400):
+        seconds = walk_duration_s(distance)
+        expected = math.ceil(seconds / 60) if seconds else 0
+        assert walk_minutes(distance) == max(1, expected) if seconds else walk_minutes(distance) == 0
     assert _walk_label(0) == "no walking"
+    assert _walk_label(590) == "10 min walk"
     assert _walk_label(616) == "11 min walk"

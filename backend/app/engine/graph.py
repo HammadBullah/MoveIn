@@ -218,15 +218,27 @@ class TransitGraph:
 
     # -- queries -----------------------------------------------------------
     def stops_near(
-        self, lat: float, lon: float, radius_m: int, *, limit: int = 20
+        self,
+        lat: float,
+        lon: float,
+        radius_m: int,
+        *,
+        limit: int = 20,
+        per_mode_limit: bool = True,
     ) -> list[tuple[Stop, float]]:
-        """Stops within ``radius_m`` of a point, nearest first."""
+        """Stops within ``radius_m`` of a point, nearest first.
+
+        ``per_mode_limit=False`` waives the per-mode willingness to walk.  That
+        is the right thing for a start or finish the traveller typed by name:
+        nobody chooses to walk 20 minutes to a bus, but if the place they asked
+        about has no closer stop, the walk is the honest answer.
+        """
         hits = self._grid.query_radius(lat, lon, radius_m, limit=limit * 3)
         out: list[tuple[Stop, float]] = []
         for idx, _dist in hits:
             stop = self.stops[self._grid_ids[idx]]
             # Per-mode willingness to walk.
-            allowed = MODE_ACCESS_WALK_M.get(stop.mode, radius_m)
+            allowed = MODE_ACCESS_WALK_M.get(stop.mode, radius_m) if per_mode_limit else radius_m
             distance = walk_distance_m(lat, lon, stop.lat, stop.lon)
             if distance <= min(radius_m, allowed):
                 out.append((stop, distance))

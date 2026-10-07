@@ -387,6 +387,23 @@ def uk_now() -> datetime:
         return datetime.utcnow()
 
 
+def to_uk_naive(moment: datetime) -> datetime:
+    """A moment from the outside world, in the clock the timetable keeps.
+
+    The API accepts ISO 8601 with an offset (``2026-10-07T18:00:00+01:00``);
+    every timetable time in MoveIn is naive UK local.  Comparing the two without
+    this conversion is a ``TypeError`` at best and an hour out at worst.
+    """
+    if moment.tzinfo is None:
+        return moment
+    try:
+        from zoneinfo import ZoneInfo
+
+        return moment.astimezone(ZoneInfo(UK_TIMEZONE)).replace(tzinfo=None)
+    except Exception:  # pragma: no cover - only on a machine with no tzdata
+        return moment.replace(tzinfo=None)
+
+
 def uk_today() -> date:
     return uk_now().date()
 

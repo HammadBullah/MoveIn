@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     #: Walking further than this in one go is not a journey anybody plans: the
     #: search will not return it unless the traveller raises the limit.
     max_walk_s: int = 1800
+    #: How close a real NaPTAN stop must be to a modelled region to be
+    #: searchable by name. The register is national; a stop 200 km from
+    #: anywhere MoveIn models is noise in an autocomplete, not an answer.
+    named_stop_radius_m: int = 25_000
     #: Maximum number of public-transport legs in a returned journey.
     max_legs: int = 5
     #: Minimum connection time at a stop served by more than one operator.

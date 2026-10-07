@@ -42,7 +42,22 @@ DAY_PRODUCT_TYPES = ("day", "cap")
 #: ride-hailing quote, a foot passenger ferry.  Without these a leg on a mode
 #: with no fare row would be priced at zero, which is worse than an estimate --
 #: it would look like a free journey and win every "cheapest" ranking.
+#: Last-resort tariff: never used for a real leg, but pricing must total.
+DEFAULT_TARIFF = FareRule(kind="flat", base=0.0, rate_per_km=0.0, cap=0.0)
+
 MODE_TARIFFS: dict[Mode, FareRule] = {
+    #: What a leg costs when nothing else prices it.  Every mode has a tariff so
+    #: that pricing a leg can never fail: a missing rule means a wrong number,
+    #: and a wrong number beats a crashed search.
+    Mode.WALK: FareRule(kind="flat", base=0.0, rate_per_km=0.0, cap=0.0),
+    Mode.CYCLE: FareRule(kind="flat", base=0.0, rate_per_km=0.0, cap=0.0),
+    Mode.BUS: FareRule(kind="distance", base=2.00, rate_per_km=0.160, cap=3.00),
+    Mode.COACH: FareRule(kind="distance", base=3.20, rate_per_km=0.058, cap=None),
+    Mode.RAIL: FareRule(kind="distance", base=1.60, rate_per_km=0.205, cap=None),
+    Mode.TRAM: FareRule(kind="distance", base=2.00, rate_per_km=0.120, cap=4.00),
+    Mode.METRO: FareRule(kind="distance", base=2.80, rate_per_km=0.150, cap=8.90),
+    Mode.FERRY: FareRule(kind="distance", base=3.00, rate_per_km=0.180, cap=None),
+    Mode.AIR: FareRule(kind="distance", base=25.00, rate_per_km=0.090, cap=None),
     Mode.TAXI: FareRule(kind="distance", base=3.20, rate_per_km=2.10, cap=None),
     Mode.RIDEHAIL: FareRule(kind="distance", base=2.50, rate_per_km=1.75, cap=None),
 }
@@ -132,9 +147,13 @@ class FareEngine:
         self.fare_rules = fare_rules
 
     # -- products ----------------------------------------------------------
-    def _rule_for(self, route_id: str, mode: Mode) -> FareRule | None:
+    def _rule_for(self, route_id: str, mode: Mode) -> FareRule:
         """The pricing rule for a leg: its corridor, else its mode's tariff."""
-        return self.fare_rules.get(route_id) or MODE_TARIFFS.get(mode)
+        return (
+            self.fare_rules.get(route_id)
+            or MODE_TARIFFS.get(mode)
+            or DEFAULT_TARIFF
+        )
 
     def products_for_route(self, route_id: str) -> list[FareAttribute]:
         return [

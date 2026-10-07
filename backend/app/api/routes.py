@@ -23,7 +23,7 @@ from ..db.models import (
     TrackedJourneyRow,
     VehiclePositionRow,
 )
-from ..domain.models import CO2_G_PER_PKM, Mode, uk_now
+from ..domain.models import CO2_G_PER_PKM, Mode, to_uk_naive, uk_now
 from ..domain.regions import REGIONS, region_for_point
 from ..engine.fares import TravellerProfile
 from ..engine.journeys import Preference
@@ -36,7 +36,7 @@ from ..schemas.requests import (
 )
 from ..services import realtime
 from .deps import DbDep, DeviceDep, OptionalDeviceDep, PlannerDep, resolve_device
-from .serializers import clock, journey_payload, money, stop_payload, walk_minutes
+from .serializers import clock, journey_payload, money, stop_payload
 
 meta = APIRouter(tags=["meta"])
 stops = APIRouter(prefix="/stops", tags=["stops"])
@@ -167,6 +167,87 @@ def data_sources(db: DbDep, planner: PlannerDep) -> dict:
     }
 
 
+@network.get("/coverage", summary="How much of the real network is modelled")
+def network_coverage(planner: PlannerDep) -> dict:
+    """What MoveIn models against what the country actually has.
+
+    The single most important honesty figure in the product. MoveIn holds the
+    real NaPTAN register for its regions -- tens of thousands of stops -- and
+    compiles a few hundred of them into corridors. Every city therefore has a
+    coverage figure well under 100%, and the app says so rather than letting a
+    traveller assume the other 99% is there.
+    """
+    import json
+
+    from ..config import get_settings
+
+    manifest_path = get_settings().data_raw_dir / "SOURCES.json"
+    real_by_region: dict[str, int] = {}
+    named_total = 0
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text())
+        real_by_region = manifest.get("naptan", {}).get("by_region", {})
+        named_total = manifest.get("named_stops", 0)
+
+    net = planner.net
+    modelled: dict[str, int] = {}
+    routes: dict[str, set[str]] = {}
+    operators: dict[str, set[str]] = {}
+    for stop in net.stops.values():
+        key = stop.region or ""
+        modelled[key] = modelled.get(key, 0) + 1
+    for trip in net.trips.values():
+        route = net.routes.get(trip.route_id)
+        if route is None:
+            continue
+        seen: set[str] = set()
+        for stop_time in net.stop_times[trip.id]:
+            stop = net.stops.get(stop_time.stop_id)
+            if stop and stop.region:
+                seen.add(stop.region)
+        for region in seen:
+            routes.setdefault(region, set()).add(route.id)
+            operators.setdefault(region, set()).add(route.operator_code)
+
+    rows = []
+    for region in REGIONS:
+        slug = region.slug
+        real = real_by_region.get(slug, 0)
+        on_network = modelled.get(slug, 0)
+        rows.append(
+            {
+                "region": slug,
+                "name": region.name,
+                "real_stops_held": real,
+                "modelled_stops": on_network,
+                "coverage_pct": round(100 * on_network / real, 2) if real else None,
+                "routes": len(routes.get(slug, ())),
+                "operators": len(operators.get(slug, ())),
+            }
+        )
+    rows.sort(key=lambda row: (-(row["real_stops_held"] or 0), row["name"]))
+
+    return {
+        "headline": (
+            "MoveIn plans on a modelled network built from real stops, not on "
+            "the whole national one: city bus timetables are not downloadable "
+            "from this deployment, so a handful of corridors per city stand in "
+            "for the hundreds of real services."
+        ),
+        "named_stops_held": named_total,
+        "named_stops_searchable": planner.named_stop_count,
+        "modelled_stops": len(net.stops),
+        "modelled_routes": len(net.routes),
+        "regions": rows,
+        "note": (
+            "Every stop is real and at its real coordinates, and every service "
+            "is run by the real operator, but only the modelled stops are served "
+            "through. Stops off the network can still be typed in as a start or "
+            "finish: MoveIn walks you to the nearest modelled stop, and says so."
+        ),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Stops and places
 # ---------------------------------------------------------------------------
@@ -269,6 +350,7 @@ def search_journeys(
         )
 
     options = request.options
+    wanted_modes = {m.strip().lower() for m in (options.modes or []) if m.strip()}
 
     def plan(max_walk_s: int | None):
         return planner.plan(
@@ -284,6 +366,9 @@ def search_journeys(
             allow_on_demand=options.allow_on_demand,
             limit=request.limit,
             max_walk_s=max_walk_s,
+            allowed_modes=wanted_modes or None,
+            max_price=options.max_price,
+            latest_arrival=request.arrive_by,
         )
 
     walk_limit_s = request.max_walk_minutes * 60 if request.max_walk_minutes else None
@@ -303,12 +388,103 @@ def search_journeys(
             walk_notice = {
                 "kind": "walk_limit_relaxed",
                 "requested_walk_minutes": request.max_walk_minutes,
-                "shortest_walk_minutes": walk_minutes(shortest),
+                "shortest_walk_minutes": max(1, round(shortest / 60)),
                 "message": (
                     f"Nothing connects {origin.label} and {destination.label} "
                     f"within a {request.max_walk_minutes} minute walk. These are "
                     f"the options if you can walk up to "
-                    f"{walk_minutes(shortest)} minutes."
+                    f"{max(1, round(shortest / 60))} minutes."
+                ),
+            }
+
+    if not result.journeys and wanted_modes:
+        result.diagnostics["modes_filtered"] = sorted(wanted_modes)
+        walk_notice = {
+            "kind": "modes",
+            "modes": sorted(wanted_modes),
+            "message": (
+                "Nothing connects these places using only "
+                + ", ".join(sorted(wanted_modes))
+                + ". Try allowing another mode."
+            ),
+        }
+
+    if not result.journeys and options.max_price is not None:
+        dropped = int(result.diagnostics.get("over_budget") or 0)
+        result.diagnostics["max_price"] = options.max_price
+        walk_notice = {
+            "kind": "max_price",
+            "max_price": options.max_price,
+            "dropped": dropped,
+            "message": (
+                f"Nothing gets there for £{options.max_price:.2f} or less"
+                + (f" — {dropped} journeys missed the budget." if dropped else ".")
+            ),
+        }
+
+    if not result.journeys and request.arrive_by is not None:
+        dropped = int(result.diagnostics.get("late_arrivals") or 0)
+        result.diagnostics["arrive_by"] = request.arrive_by.isoformat()
+        walk_notice = {
+            "kind": "arrive_by",
+            "arrive_by": request.arrive_by.isoformat(),
+            "dropped": dropped,
+            "message": (
+                f"Nothing arrives by {to_uk_naive(request.arrive_by).strftime('%H:%M')}"
+                + (f" — the {dropped} journeys found all got in later." if dropped else ".")
+            ),
+        }
+
+    if not result.journeys:
+        # A stop MoveIn holds but does not serve: say which end is off the
+        # network and how far the nearest modelled stop is, rather than leaving
+        # an empty screen that reads like "no such place".
+        for end, place in (("origin", origin), ("destination", destination)):
+            if end not in (result.diagnostics.get("off_network") or []):
+                continue
+            nearest = place.nearest_served or {}
+            walk_notice = {
+                "kind": "off_network",
+                "end": end,
+                "label": place.label,
+                "nearest_served": nearest,
+                "message": (
+                    f"{place.label} is a real stop, but no MoveIn route reaches it. "
+                    + (
+                        f"The nearest modelled stop is {nearest['name']}, "
+                        + (
+                            f"{nearest['walk_minutes']} minutes' walk away."
+                            if nearest.get("reachable")
+                            else "further away than anybody would walk."
+                        )
+                        if nearest.get("name")
+                        else "No modelled stop is within walking distance."
+                    )
+                    + " Try a town centre, or raise the walk limit."
+                ),
+            }
+            break
+            break
+    if False:
+        # "Nothing within a 10 minute walk" is an answer, but a useless one on
+        # its own.  If the traveller's limit is what emptied the screen, show
+        # them what it would cost to relax it, labelled as exactly that.
+        relaxed = plan(None)
+        if relaxed.journeys:
+            result = relaxed
+            result.diagnostics["walk_limit_relaxed"] = request.max_walk_minutes
+            shortest = min(
+                j.longest_walk_s for j in result.journeys
+            )
+            walk_notice = {
+                "kind": "walk_limit_relaxed",
+                "requested_walk_minutes": request.max_walk_minutes,
+                "shortest_walk_minutes": max(1, round(shortest / 60)),
+                "message": (
+                    f"Nothing connects {origin.label} and {destination.label} "
+                    f"within a {request.max_walk_minutes} minute walk. These are "
+                    f"the options if you can walk up to "
+                    f"{max(1, round(shortest / 60))} minutes."
                 ),
             }
 
@@ -372,6 +548,10 @@ def _place_payload(place) -> dict:  # type: ignore[no-untyped-def]
         "mode": getattr(place, "mode", ""),
         "region": getattr(place, "region", ""),
         "alternatives": alternatives,
+        # A real stop that no modelled corridor calls at: usable as an origin,
+        # but the answer must not imply the network reaches it.
+        "served": getattr(place, "served", True),
+        "nearest_served": getattr(place, "nearest_served", {}),
     }
 
 

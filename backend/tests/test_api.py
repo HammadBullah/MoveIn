@@ -706,3 +706,201 @@ def test_the_walk_limit_is_optional(client):
     ).json()
     assert body["notice"] is None
     assert "walk_limit_relaxed" not in body["diagnostics"]
+
+
+# ---------------------------------------------------------------------------
+# Coverage: the register versus the corridors
+# ---------------------------------------------------------------------------
+
+
+def test_a_real_stop_off_the_modelled_network_can_still_be_searched(client):
+    """The register is searchable, not just the 400-odd modelled stops."""
+    body = client.get("/api/stops/search", params={"q": "Mapperley", "limit": 5}).json()
+    assert body["results"], "Mapperley is a real place with real stops"
+    hit = body["results"][0]
+    assert hit["id"].startswith("naptan:")
+    assert hit["served"] is False
+    assert hit["nearest_served"]["name"], "an off-network stop still points at somewhere served"
+
+
+def test_a_search_only_returns_stops_near_the_cities_movein_models(client):
+    """The register is national with no locality column, so region anchoring decides."""
+    body = client.get("/api/stops/search", params={"q": "Mapperley", "limit": 8}).json()
+    regions = {hit["region"] for hit in body["results"]}
+    assert regions == {"nottingham"}, regions
+    # Every hit is a real stop at a real coordinate in reach of the network.
+    for hit in body["results"]:
+        if hit["served"] is False:
+            assert hit["nearest_served"]["distance_m"] > 0
+
+
+def test_planning_from_an_off_network_stop_says_so(client):
+    """The traveller can start anywhere; the answer must not pretend otherwise."""
+    body = client.post(
+        "/api/journeys/search",
+        json={"origin": "Mapperley", "destination": "Birmingham", "limit": 3},
+    ).json()
+    assert body["origin"]["served"] is False
+    assert body["origin"]["nearest_served"]["name"]
+    assert body["journeys"], "walking to the nearest served stop is a journey"
+    assert body["diagnostics"]["off_network"] == ["origin"]
+    # The walk to the network is longer than a bus-stop amble would normally be
+    # allowed to be, which is exactly the point: it is not optional here.
+    assert body["diagnostics"]["access_walk_widened_m"] > 2000
+    assert any(j["longest_walk_s"] > 900 for j in body["journeys"])
+
+
+def test_a_stop_no_modelled_route_reaches_is_answered_not_ignored(client):
+    """A real stop 11 km from the network gets an explanation, not an empty list.
+
+    Syerston is a real Nottinghamshire village served by real buses; it is just
+    not on a corridor MoveIn compiles.  Silently returning nothing would look
+    like the place does not exist.
+    """
+    body = client.post(
+        "/api/journeys/search",
+        json={"origin": "Syerston", "destination": "Birmingham", "limit": 3},
+    ).json()
+    assert body["journeys"] == []
+    assert body["origin"]["served"] is False
+    assert body["notice"]["kind"] == "off_network"
+    assert body["notice"]["end"] == "origin"
+    assert body["notice"]["label"] == body["origin"]["label"]
+    assert "real stop" in body["notice"]["message"]
+
+
+def test_the_register_has_no_placeholder_names(client):
+    body = client.get("/api/stops/search", params={"q": "Na", "limit": 8}).json()
+    assert all(hit["name"].strip().casefold() not in {"na", "n/a"} for hit in body["results"])
+
+
+def test_a_served_stop_is_marked_served(client):
+    body = client.post(
+        "/api/journeys/search",
+        json={"origin": "Nottingham", "destination": "Birmingham", "limit": 2},
+    ).json()
+    assert body["origin"]["served"] is True
+    assert body["origin"]["nearest_served"] == {}
+
+
+def test_coverage_reports_the_gap_rather_than_hiding_it(client):
+    body = client.get("/api/network/coverage").json()
+    assert body["modelled_stops"] > 0
+    assert body["named_stops_held"] > body["modelled_stops"] * 10, "coverage is genuinely partial"
+    assert body["named_stops_searchable"] > 0
+    nottingham = next(row for row in body["regions"] if row["region"] == "nottingham")
+    assert nottingham["modelled_stops"] > 0
+    assert nottingham["real_stops_held"] > nottingham["modelled_stops"]
+    assert 0 < nottingham["coverage_pct"] < 5
+    assert nottingham["routes"] > 0 and nottingham["operators"] > 0
+    # Cities MoveIn does not model are listed too -- a zero is information.
+    assert any(row["modelled_stops"] == 0 for row in body["regions"])
+
+
+# ---------------------------------------------------------------------------
+# The traveller's own limits: modes, budget, deadline
+# ---------------------------------------------------------------------------
+
+
+def test_a_mode_filter_returns_only_journeys_using_those_modes(client):
+    """The transport sheet says which modes you will use, and is believed."""
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 6,
+            "options": {"modes": ["rail"]},
+        },
+    ).json()
+
+    assert body["journeys"], "there is a train between these two"
+    for journey in body["journeys"]:
+        used = {leg["mode"] for leg in journey["legs"] if leg["kind"] == "transit"}
+        assert used == {"rail"}, used
+
+
+def test_a_mode_filter_with_no_answer_says_which_filter_did_it(client):
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 4,
+            "options": {"modes": ["ferry"]},
+        },
+    ).json()
+
+    assert body["journeys"] == []
+    assert body["notice"]["kind"] == "modes"
+    assert "ferry" in body["notice"]["message"].lower()
+
+
+def test_a_budget_is_a_ceiling_not_a_suggestion(client):
+    generous = client.post(
+        "/api/journeys/search",
+        json={"origin": "Nottingham", "destination": "Birmingham", "limit": 8},
+    ).json()
+    cheapest = min(j["price"] for j in generous["journeys"])
+
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 8,
+            "options": {"max_price": cheapest + 0.5},
+        },
+    ).json()
+
+    assert body["journeys"]
+    for journey in body["journeys"]:
+        assert journey["price"] <= cheapest + 0.5 + 0.005
+
+
+def test_a_budget_that_buys_nothing_is_explained(client):
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 4,
+            "options": {"max_price": 0.5},
+        },
+    ).json()
+
+    assert body["journeys"] == []
+    assert body["notice"]["kind"] == "max_price"
+    assert body["diagnostics"]["over_budget"] > 0
+
+
+def test_arrive_by_returns_journeys_that_make_the_deadline(client):
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 6,
+            "arrive_by": "2026-10-07T23:30:00+01:00",
+        },
+    ).json()
+
+    assert body["journeys"]
+    for journey in body["journeys"]:
+        assert journey["arrival_time"] <= "23:30"
+
+
+def test_arrive_by_in_the_past_reports_the_deadline_it_missed(client):
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 4,
+            "departure": "2026-10-07T20:00:00+01:00",
+            "arrive_by": "2026-10-07T20:05:00+01:00",
+        },
+    ).json()
+
+    assert body["journeys"] == []
+    assert body["notice"]["kind"] == "arrive_by"

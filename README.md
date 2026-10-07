@@ -26,8 +26,8 @@ features and national-scale deployment are deliberately out of scope (see
 | Ranking | Seven traveller preferences, four normalised criteria, archetype labelling (Cheapest, Fastest, Fewest changes, Least walking, Lowest emissions, Best value, Step-free) |
 | Walking | A 15-minute promise by default, a stated limit the traveller can tighten (10 / 15 / 20 minutes), and longer walks returned as a labelled choice rather than as the answer |
 | API | 25 endpoints over FastAPI, OpenAPI documented at `/api/docs` |
-| App | React + TypeScript: Plan, Live, Saved and Data screens, drawn from real coordinates, no map tile dependency |
-| Quality | 130 tests covering ingestion, the compiler, the graph, the engine, fares, ranking and every endpoint |
+| App | React + TypeScript, built mobile-first: Home, Results, Journey details, Live, Cheapest/Fastest, price comparison, Saved places, Trips, Price alerts, Profile and Data — a map-first layout with a draggable sheet and a bottom nav, drawn from real coordinates with no map tile dependency |
+| Quality | 171 tests covering ingestion, the compiler, the graph, the engine, fares, ranking and every endpoint, plus a DOM render test that mounts the real app against the real API |
 
 ---
 
@@ -143,7 +143,7 @@ live data is a configuration change rather than a rewrite.
                        └───────────────┬──────────────────────────┘
                                        ▼
                        ┌──────────────────────────────────────────┐
-                       │ React app: Plan · Live · Saved · Data    │
+                       │ React app: mobile, map-first, shell      │
                        └──────────────────────────────────────────┘
 ```
 
@@ -175,6 +175,15 @@ beyond the promise are still returned, flagged, in their own collapsed section;
 they never take a headline label such as "Cheapest" while a comfortable journey
 could have it.
 
+**The traveller's own limits are honoured, and explained.** `options.modes`
+restricts the search to the vehicles you are willing to take, `options.max_price`
+is a ceiling rather than a suggestion, and `arrive_by` answers "I must be there
+by six" by sweeping back through the day's departures instead of pretending the
+clock stands still. A departure you name is kept: the search does not quietly
+move your 20:00 to 17:51 to satisfy a deadline. When a filter removes everything,
+the response carries a `notice` naming the filter that did it rather than an
+empty list.
+
 ### Why the compiled timetable is still worth planning on
 
 Every journey the engine produces is a real route between real places: the
@@ -197,9 +206,9 @@ the feed plumbing is already built and tested.
 | GET | `/api/stops/nearby` | Stops near a coordinate |
 | GET | `/api/stops/regions` | The modelled cities and towns |
 | GET | `/api/stops/{stop_id}` | One stop with its routes and operators |
-| POST | `/api/journeys/search` | **Plan a journey** (`max_walk_minutes`, `limit`, preference, traveller) |
+| POST | `/api/journeys/search` | **Plan a journey** — `preference`, `traveller`, `max_walk_minutes`, `limit`, `arrive_by`, and `options` (`modes`, `max_price`, `max_legs`, `step_free_only`) |
 | POST | `/api/journeys/compare-emissions` | Compare modes on one trip |
-| GET | `/api/network/summary` · `/operators` · `/routes` | What the network contains |
+| GET | `/api/network/summary` · `/operators` · `/routes` · `/coverage` | What the network contains, and how much of each city's real stop register it models |
 | GET | `/api/fares/products` · `/operators` | The fare table |
 | GET | `/api/live/vehicles` · `/alerts` | Where the vehicles are, what is disrupted |
 | POST | `/api/live/track` | Follow the journey you are on |
@@ -223,11 +232,13 @@ for a real authenticated user without changing any call site.
 cd frontend && npm run test:render             # the planning screen, rendered and asserted on
 ```
 
-The render test mounts the real app in a DOM against the real API and asserts
-what a traveller would see: that the walk limit is offered, that the default
-keeps long walks out, that asking for "Any walk" re-plans and files them in
-their own labelled section, and that choosing a row moves the detail panel to
-it. A type-check does not tell you whether a page renders or what it says.
+The render test mounts the real app in a DOM against the real API and walks the
+journey a traveller would take: the results sheet and its option cards, the map
+drawn from real coordinates, the numbered timeline behind "View journey", live
+mode, the price comparison, the transport filter, and the Home screen with its
+bottom navigation. It asserts on prices, durations, walking and badges — what a
+person actually reads. A type-check does not tell you whether a page renders or
+what it says.
 
 The suite runs against the real compiled feed rather than a synthetic fixture,
 because the bugs worth catching are in the data: a corridor that does not
