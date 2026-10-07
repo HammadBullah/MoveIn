@@ -12,7 +12,7 @@ thousands of published GTFS feeds can be loaded without touching the engine.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 
 
@@ -366,6 +366,29 @@ class TransportNetwork:
             "fares": len(self.fares),
             **{f"routes_{k}": v for k, v in sorted(mode_counts.items())},
         }
+
+
+#: MoveIn plans against a UK timetable, so "now" is UK local time.  Reading it
+#: from the machine instead is how a 09:14 departure becomes 08:14 on a server
+#: running UTC -- and how, between late March and late October, every journey
+#: planned "now" is an hour out during British Summer Time.
+UK_TIMEZONE = "Europe/London"
+
+
+def uk_now() -> datetime:
+    """The current time in the UK, as a naive datetime like the timetable."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo(UK_TIMEZONE)).replace(tzinfo=None)
+    except Exception:  # pragma: no cover - only on a machine with no tzdata
+        # Without a tz database the best available answer is UTC, which is right
+        # for half the year rather than never.
+        return datetime.utcnow()
+
+
+def uk_today() -> date:
+    return uk_now().date()
 
 
 def seconds_to_gtfs_time(seconds: int) -> str:

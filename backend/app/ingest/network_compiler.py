@@ -43,6 +43,7 @@ from ..domain.models import (
     Transfer,
     TransportNetwork,
     Trip,
+    uk_today,
 )
 from ..domain.network_spec import (
     ALL_CORRIDORS,
@@ -70,7 +71,7 @@ SERVICE_WINDOW_FORWARD_DAYS = 335
 
 
 def _service_window(today: date | None = None) -> tuple[date, date]:
-    today = today or date.today()
+    today = today or uk_today()
     # Snap to a Monday so the weekday/weekend service split lines up cleanly.
     start = today - timedelta(days=SERVICE_WINDOW_BACK_DAYS)
     start -= timedelta(days=start.weekday())

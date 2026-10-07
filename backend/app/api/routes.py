@@ -23,7 +23,7 @@ from ..db.models import (
     TrackedJourneyRow,
     VehiclePositionRow,
 )
-from ..domain.models import CO2_G_PER_PKM, Mode
+from ..domain.models import CO2_G_PER_PKM, Mode, uk_now
 from ..domain.regions import REGIONS, region_for_point
 from ..engine.fares import TravellerProfile
 from ..engine.journeys import Preference
@@ -252,7 +252,7 @@ def search_journeys(
     request: JourneySearchRequest,
 ) -> dict:
     """The product's core call: From / To / When / Preference in, journeys out."""
-    departure = request.departure or datetime.now().replace(second=0, microsecond=0)
+    departure = request.departure or uk_now().replace(second=0, microsecond=0)
     origin = planner.resolve_place(request.origin)
     destination = planner.resolve_place(request.destination)
     if origin is None:
@@ -567,7 +567,7 @@ def live_vehicles(
     route_id: str | None = Query(default=None),
     limit: int = Query(default=120, ge=1, le=500),
 ) -> dict:
-    now = datetime.now()
+    now = uk_now()
     services = planner.graph.services_on(now.date())
     vehicles = realtime.simulate_positions(
         planner.graph, at=now, services=services, limit=limit
@@ -627,7 +627,7 @@ def track_journey(
     request: TrackJourneyRequest,
 ) -> dict:
     device = resolve_device(device, request.device_key)
-    now = datetime.now()
+    now = uk_now()
     vehicles = realtime.simulate_positions(planner.graph, at=now)
     legs = request.payload.get("legs", [])
     transit_legs = [leg for leg in legs if leg.get("kind") == "transit"]
@@ -826,7 +826,7 @@ def create_alert(
         target_price=request.target_price,
         baseline_price=baseline,
         last_price=baseline,
-        last_checked_at=datetime.now(),
+        last_checked_at=uk_now(),
     )
     db.add(row)
     db.commit()
@@ -853,7 +853,7 @@ def check_alerts(planner: PlannerDep, db: DbDep, device: DeviceDep) -> dict:
     """Re-price every active watch and report anything that got cheaper."""
     rows = repo.list_price_alerts(db, device)
     checked, triggered = [], []
-    now = datetime.now()
+    now = uk_now()
     for row in rows:
         if not row.active:
             continue

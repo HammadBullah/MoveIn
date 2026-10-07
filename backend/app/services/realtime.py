@@ -20,7 +20,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from ..db.models import ServiceAlertRow, VehiclePositionRow
-from ..domain.models import Mode, TransportNetwork
+from ..domain.models import Mode, TransportNetwork, uk_now
 from ..engine.graph import TransitGraph
 from ..ingest.geo import bearing_deg, haversine_m
 
@@ -141,7 +141,7 @@ def simulate_positions(
     it should be, plus a deterministic delay so the interface has to cope with
     real-world lateness.
     """
-    at = at or datetime.now()
+    at = at or uk_now()
     services = services if services is not None else graph.services_on(at.date())
     seconds = at.hour * 3600 + at.minute * 60 + at.second
     rng = random.Random(seed if seed is not None else int(at.timestamp() // 60))
@@ -291,7 +291,7 @@ def seed_alerts(session: Session, net: TransportNetwork) -> int:
     existing = session.query(ServiceAlertRow).count()
     if existing:
         return 0
-    now = datetime.now()
+    now = uk_now()
     for alert in SEED_ALERTS:
         session.add(
             ServiceAlertRow(
@@ -343,7 +343,7 @@ def from_siri_vm(payloads: list[dict], *, net: TransportNetwork | None = None) -
                 next_stop_id=record.get("next_stop_id", ""),
                 next_stop_name=record.get("next_stop_name", ""),
                 progress=float(record.get("progress") or 0.0),
-                recorded_at=record.get("recorded_at") or datetime.now(),
+                recorded_at=record.get("recorded_at") or uk_now(),
                 source=record.get("source") or "siri-vm",
                 mode=(route.mode.value if route else "bus"),
                 headsign=record.get("headsign", ""),

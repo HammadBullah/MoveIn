@@ -336,3 +336,26 @@ def test_licences_are_recorded_for_every_source_the_api_reports():
         assert feed["adapter"].startswith("app.ingest."), key
         assert feed.get("name"), f"{key} has no human name for the UI"
         assert feed.get("provides"), f"{key} does not say what it would add"
+
+
+def test_now_is_uk_local_time_not_the_machines():
+    """"Now" must be UK wall-clock time, because the timetable is.
+
+    This server runs UTC. A search for "now" in British Summer Time that reads
+    the machine's clock plans an hour into the past: the results start before
+    the traveller has asked to leave, and every "leave in 20 minutes" is wrong.
+    """
+    from datetime import timezone
+    from zoneinfo import ZoneInfo
+
+    from backend.app.domain.models import uk_now, uk_today
+
+    london = datetime.now(ZoneInfo("Europe/London")).replace(tzinfo=None)
+    assert abs((uk_now() - london).total_seconds()) < 5
+
+    utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    offset = (london - utc).total_seconds()
+    assert abs((uk_now() - utc).total_seconds() - offset) < 5, (
+        "uk_now() is following the machine clock rather than the UK one"
+    )
+    assert uk_today() == london.date()

@@ -20,7 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..config import Settings, get_settings
-from ..domain.models import Mode, Stop, TransportNetwork
+from ..domain.models import Mode, Stop, TransportNetwork, uk_now
 from ..domain.network_spec import ALL_CORRIDORS, FareRule
 from ..domain.regions import REGIONS, REGIONS_BY_SLUG
 from ..ingest.geo import haversine_m, walk_distance_m, walk_duration_s
@@ -281,7 +281,7 @@ class JourneyPlanner:
             return result
 
         if departure is None:
-            departure = datetime.now().replace(second=0, microsecond=0)
+            departure = uk_now().replace(second=0, microsecond=0)
         result.departure = departure
 
         service_day = departure.replace(hour=0, minute=0, second=0, microsecond=0)
