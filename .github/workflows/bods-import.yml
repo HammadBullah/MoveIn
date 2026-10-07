@@ -63,6 +63,7 @@ jobs:
             git add -f backend/data/raw/real_bus_routes/compiled_bods_*.json.gz || true
             git add -f backend/data/raw/real_bus_routes/compiled_bods.json.gz || true
             git add -f backend/data/raw/bods/manifest.json || true
+            git add -f backend/data/raw/bods_extract/ || true
             git status --short
             git commit -m 'BODS fetch report and compiled routes' || echo 'nothing to commit'
             for attempt in 1 2 3; do

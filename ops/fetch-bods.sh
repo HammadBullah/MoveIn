@@ -145,5 +145,26 @@ for region in "${REGIONS[@]}"; do
 done
 
 echo
+echo "--- published timetables, through the DfT's own extractor ---"
+# BODSDataExtractor is the client the Department for Transport publishes for
+# this.  It reads the API catalogue -- which is key-gated -- and parses the
+# TransXChange inside each dataset, so it needs a key this runner can only get
+# as a repository secret.
+if [ -z "${MOVEIN_BODS_API_KEY:-}" ]; then
+  echo "no BODS key available to this runner, so the API-keyed extraction is skipped."
+  echo "the regional files above need no key; the catalogue and the per-operator"
+  echo "datasets do.  to enable this phase, add a repository secret named"
+  echo "BODS_API_KEY (Settings -> Secrets and variables -> Actions -> New secret)."
+else
+  echo "key present: yes (never printed)"
+  if python -m pip install --quiet BODSDataExtractor; then
+    python scripts/extract_bods_cities.py --limit 200 || echo "extraction failed"
+  else
+    echo "could not install BODSDataExtractor -- skipping the extraction"
+  fi
+fi
+
+echo
 echo "=== $(date -u +%FT%TZ) result ==="
 ls -l "$OUT_DIR"/compiled_bods_*.json.gz 2>/dev/null || echo "nothing compiled"
+ls -l backend/data/raw/bods_extract/ 2>/dev/null || echo "no extractor output"
