@@ -374,3 +374,58 @@ def test_emissions_are_ordered_by_mode(planner, departure):
     ]
     for journey in result.journeys:
         assert journey.co2_g >= 0
+
+
+def test_a_journey_departs_when_the_traveller_does(planner):
+    """The declared departure is the first step, not the minute that was asked for.
+
+    This was a real defect: a search at 11:07 returned a journey that said
+    "departs 11:07, 6h 10m" when the coach left at 11:38 and the walk to the
+    station took two minutes. The wait had been credited to the journey, so the
+    headline duration disagreed with the itinerary underneath it -- and a
+    traveller reading only the card believed a journey was half an hour longer
+    than it is.
+    """
+    from backend.app.engine.search import TransitLeg, WalkLeg
+
+    checked = 0
+    for origin, destination in (
+        ("Nottingham", "Leeds"),
+        ("Nottingham", "Birmingham"),
+        ("Nottingham", "Manchester"),
+    ):
+        for preference in (Preference.CHEAPEST, Preference.BEST_VALUE, Preference.FASTEST):
+            requested = datetime(2026, 10, 7, 9, 22)
+            result = planner.plan(
+                origin=origin, destination=destination, departure=requested,
+                preference=preference, limit=6,
+            )
+            for journey in result.journeys:
+                transit = next(
+                    (l for l in journey.legs if isinstance(l, (TransitLeg,))), None
+                )
+                if transit is None:
+                    continue
+                checked += 1
+                first = journey.legs[0]
+                # Transit legs carry seconds since the service day began; the
+                # journey's own times are datetimes on that same day.
+                midnight = datetime.combine(journey.departure.date(), datetime.min.time())
+                if isinstance(first, WalkLeg):
+                    # The walk finishes exactly as the vehicle leaves.
+                    leaves = journey.departure + timedelta(seconds=first.duration_s)
+                    expected = midnight + timedelta(seconds=transit.departure_s)
+                    assert leaves == expected, (
+                        f"{origin}->{destination}: the walk does not meet the vehicle"
+                    )
+                else:
+                    assert first is transit, "a journey must start with its first step"
+                    assert journey.departure == midnight + timedelta(
+                        seconds=transit.departure_s
+                    )
+                # The headline must equal the itinerary it describes.
+                assert journey.duration_s == int(
+                    (journey.arrival - journey.departure).total_seconds()
+                )
+                assert journey.departure >= requested
+    assert checked >= 6, "not enough journeys to be meaningful"

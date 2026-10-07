@@ -275,7 +275,23 @@ class JourneyAssembler:
         # --- timing ------------------------------------------------------
         access_s = access.duration_s if access is not None and access.distance_m > 40 else 0
         on_demand_s = on_demand.duration_s if (on_demand and not label.legs) else 0
+
+        # A journey starts when the traveller does, not when they asked for it.
+        # If the first step is the walk to the stop, "departing" at the requested
+        # minute would credit the journey with a wait spent standing in the
+        # street -- and the itinerary would disagree with its own first leg.
         departure = service_day + timedelta(seconds=departure_s)
+        if legs:
+            first_transit = next(
+                (leg for leg in legs if isinstance(leg, (TransitLeg, OnDemandLeg))), None
+            )
+            if first_transit is not None and isinstance(legs[0], WalkLeg):
+                departure = service_day + timedelta(
+                    seconds=first_transit.departure_s - legs[0].duration_s
+                )
+            elif first_transit is not None and first_transit is legs[0]:
+                departure = service_day + timedelta(seconds=first_transit.departure_s)
+
         arrival_seconds = label.arrival_s
         # The label's own arrival is the latest thing that happened, whether the
         # last step was a vehicle or the walk to this stop.

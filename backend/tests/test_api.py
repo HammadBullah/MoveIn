@@ -617,3 +617,26 @@ def test_empty_search_is_rejected_cleanly(client):
 def test_every_request_reports_its_duration(client):
     response = client.get("/api/health")
     assert "x-movein-duration-ms" in {key.lower() for key in response.headers}
+
+
+def test_the_departure_on_the_card_is_the_departure_of_the_first_leg(client):
+    """The journey headline and its own itinerary must agree about the start.
+
+    A card that says "departs 11:07" above a first leg that starts at 11:36 is
+    the kind of thing nobody notices in a demo and everybody notices when they
+    are standing on a platform.
+    """
+    body = client.post(
+        "/api/journeys/search",
+        json={"origin": "Nottingham", "destination": "Leeds", "limit": 6},
+    ).json()
+    assert body["journeys"]
+    for journey in body["journeys"]:
+        first = journey["legs"][0]
+        start = first.get("start_time") or first.get("departure")
+        assert start == journey["departure_time"], (
+            f"{journey['summary']}: first leg starts {start} "
+            f"but the journey says {journey['departure_time']}"
+        )
+        assert journey["duration_s"] >= 0
+        assert journey["arrival"] >= journey["departure"]
