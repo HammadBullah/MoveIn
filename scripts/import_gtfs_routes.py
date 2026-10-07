@@ -32,12 +32,52 @@ import argparse
 import csv
 import gzip
 import json
+import os
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+class _Tee:
+    """A stream that writes to the terminal and to the run's report file."""
+
+    def __init__(self, stream, handle):
+        self.stream = stream
+        self.handle = handle
+
+    def write(self, text: str) -> int:
+        self.stream.write(text)
+        self.handle.write(text)
+        self.handle.flush()
+        return len(text)
+
+    def flush(self) -> None:
+        self.stream.flush()
+        self.handle.flush()
+
+    def isatty(self) -> bool:
+        return False
+
+
+def start_report(explicit: str | None = None) -> None:
+    """Tee this run's log into a file, when one was asked for.
+
+    A compile that happens on a GitHub runner has to leave its log in the
+    repository: that is the only channel back to where the work is read.
+    """
+    for candidate in (explicit, os.environ.get("MOVEIN_BODS_REPORT"), os.environ.get("REPORT")):
+        if not candidate:
+            continue
+        path = Path(candidate)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = path.open("a", encoding="utf-8")
+        sys.stdout = _Tee(sys.stdout, handle)  # type: ignore[assignment]
+        sys.stderr = _Tee(sys.stderr, handle)  # type: ignore[assignment]
+        print(f"\n--- compile report opened {datetime.now(timezone.utc).isoformat(timespec='seconds')} ---")
+        return
 sys.path.insert(0, str(ROOT))
 
 from backend.app.domain.real_bus import simplify_line  # noqa: E402
@@ -300,7 +340,14 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE_M)
+    parser.add_argument(
+        "--report",
+        default=None,
+        help="Also write this run's log here (else $MOVEIN_BODS_REPORT or $REPORT)",
+    )
     args = parser.parse_args()
+
+    start_report(args.report)
 
     if not args.source.exists():
         raise SystemExit(

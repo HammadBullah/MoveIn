@@ -42,12 +42,127 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
+import ssl
 import sys
+import urllib.error
+import urllib.request
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+class _Tee:
+    """A stream that writes to the terminal and to the run's report file.
+
+    The BODS key travels in a query string, so any error message that quotes a
+    URL can quote the key with it.  This log is committed to a public
+    repository, so the key is masked on the way through.
+    """
+
+    def __init__(self, stream, handle, secret: str = ""):
+        self.stream = stream
+        self.handle = handle
+        self.secret = secret.strip()
+
+    def _mask(self, text: str) -> str:
+        if self.secret and self.secret in text:
+            return text.replace(self.secret, "***")
+        return text
+
+    def write(self, text: str) -> int:
+        text = self._mask(text)
+        self.stream.write(text)
+        self.handle.write(text)
+        self.handle.flush()
+        return len(text)
+
+    def flush(self) -> None:
+        self.stream.flush()
+        self.handle.flush()
+
+    def isatty(self) -> bool:
+        return False
+
+
+def report_path(explicit: str | None = None) -> Path | None:
+    """Where to write this run's log, if anywhere.
+
+    A fetch that happens somewhere else -- on a GitHub runner, say -- leaves its
+    log behind in the repository, because that is the only channel back.
+    """
+    for candidate in (explicit, os.environ.get("MOVEIN_BODS_REPORT"), os.environ.get("REPORT")):
+        if candidate:
+            path = Path(candidate)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            return path
+    return None
+
+
+def start_report(explicit: str | None = None, secret: str = "") -> None:
+    path = report_path(explicit)
+    if path is None:
+        return
+    handle = path.open("a", encoding="utf-8")
+    sys.stdout = _Tee(sys.stdout, handle, secret)  # type: ignore[assignment]
+    sys.stderr = _Tee(sys.stderr, handle, secret)  # type: ignore[assignment]
+    print(f"\n--- report opened {datetime.now(timezone.utc).isoformat(timespec='seconds')} ---")
+
+
+def probe(key: str = "") -> None:
+    """Say, in the log, exactly what this machine can reach.
+
+    MoveIn's own sandbox cannot reach BODS at all, so when a fetch fails it is
+    worth being able to tell "this machine has no route" apart from "the request
+    was wrong".
+    """
+    host = "data.bus-data.dft.gov.uk"
+    print("--- network probe ---")
+    try:
+        print(f"dns: {host} -> {socket.gethostbyname(host)}")
+    except OSError as error:
+        print(f"dns: FAILED ({error}) -- nothing else will work")
+        return
+
+    try:
+        with socket.create_connection((host, 443), timeout=15):
+            print("tcp 443: connected")
+    except OSError as error:
+        print(f"tcp 443: FAILED ({error})")
+        return
+
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((host, 443), timeout=15) as raw:
+            with context.wrap_socket(raw, server_hostname=host) as tls:
+                print(f"tls: {tls.version()}")
+    except (OSError, ssl.SSLError) as error:
+        print(f"tls: FAILED ({error})")
+        return
+
+    for label, suffix in (("without a key", ""), ("with the key", f"&api_key={key}" if key else "")):
+        url = f"{BODS_BASE_URL}/api/v1/dataset/?limit=1{suffix}"
+        try:
+            with urllib.request.urlopen(url, timeout=30) as response:
+                body = response.read(200).decode("utf-8", "replace")
+                print(f"catalogue {label}: HTTP {response.status}, {body[:160]}")
+        except urllib.error.HTTPError as error:
+            print(f"catalogue {label}: HTTP {error.code} {error.reason}")
+        except OSError as error:
+            print(f"catalogue {label}: FAILED ({error})")
+
+    url = "https://data.bus-data.dft.gov.uk/timetable/dataset/465/download/"
+    try:
+        request = urllib.request.Request(url, headers={"Range": "bytes=0-1023"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            chunk = response.read()
+            print(f"one dataset download: HTTP {response.status}, first {len(chunk)} bytes {chunk[:4]!r}")
+    except urllib.error.HTTPError as error:
+        print(f"one dataset download: HTTP {error.code} {error.reason}")
+    except OSError as error:
+        print(f"one dataset download: FAILED ({error})")
 sys.path.insert(0, str(ROOT))
 
 from backend.app.ingest.bods import BODS_BASE_URL  # noqa: E402
@@ -247,9 +362,21 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Stop after this many datasets")
     parser.add_argument("--list", action="store_true", help="Only list what exists; download nothing")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be fetched")
+    parser.add_argument(
+        "--report",
+        default=None,
+        help="Also write this run's log here (else $MOVEIN_BODS_REPORT or $REPORT)",
+    )
+    parser.add_argument(
+        "--no-probe", action="store_true", help="Skip the network probe this script prints first"
+    )
     args = parser.parse_args()
 
     key = api_key(args.api_key)
+    start_report(args.report, secret=key)
+    print(f"fetch_bods_gtfs.py {datetime.now(timezone.utc).isoformat(timespec='seconds')}")
+    if not args.no_probe:
+        probe(key)
     print("Asking BODS what exists...")
     datasets = fetch_datasets(key, limit=args.limit)
     print(f"{len(datasets)} published datasets available")
