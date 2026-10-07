@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+.vite/
+
+# Local caches and downloaded source material (re-fetch with scripts/fetch_real_data.py)
+.cache/
+
+# Generated at runtime from the compiled network
+backend/data/movein.db
+
+# SQLite sidecar files
+backend/data/movein.db-*
+
+# Compiled feed and GTFS artefacts (rebuild with the command in README.md)
+backend/data/generated/
+
+# TypeScript build info
+frontend/tsconfig.tsbuildinfo
