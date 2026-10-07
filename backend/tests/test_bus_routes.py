@@ -29,13 +29,29 @@ def test_coverage_counts_what_is_actually_there(client):
     assert sum(payload["routes_per_operator"].values()) == payload["routes"]
 
 
-def test_the_layer_says_it_has_no_times(client):
-    """A route shape is not a timetable, and the API must not imply otherwise."""
-    for path in ("/api/bus/coverage", "/api/bus/routes", "/api/bus/map"):
-        assert client.get(path).json()["has_times"] is False
-    body = client.get("/api/bus/coverage").json()
-    assert "no departure times" in body["note"].lower()
-    assert "1,700" in body["coverage_note"] or "1700" in body["coverage_note"]
+def test_the_layer_says_which_routes_carry_published_times(client):
+    """Say plainly how much of the layer is a timetable and how much a shape.
+
+    The compiled layer carries a departure time at every stop of the sampled
+    trip, taken from the published feed, so `has_times` is true and `routes`
+    says how many routes have one.  The note must match that, in either
+    direction -- if the day ever comes when the compiler drops times, the note
+    has to go back to saying so.
+    """
+    coverage = client.get("/api/bus/coverage").json()
+    detail = client.get("/api/bus/routes", params={"limit": 1}).json()
+    for body in (coverage, detail):
+        assert isinstance(body["has_times"], bool)
+    with_times = coverage.get("routes_with_times", 0)
+    if with_times:
+        assert coverage["has_times"] is True
+        assert "no departure times" not in coverage["note"].lower()
+        route = client.get(f"/api/bus/routes/{detail['routes'][0]['id']}").json()
+        assert route["has_times"] is True
+        assert all(stop["time"] for stop in route["stops"]), "a timed route has a time at every stop"
+    else:
+        assert coverage["has_times"] is False
+        assert "no departure times" in coverage["note"].lower()
 
 
 

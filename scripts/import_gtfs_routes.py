@@ -34,6 +34,7 @@ import gzip
 import io
 import json
 import os
+import random
 import resource
 import sys
 import zipfile
@@ -233,6 +234,7 @@ def compile_gtfs(
     agency_names: dict[str, str],
     prefix: str = "",
     region: str = "",
+    sample: int = SAMPLE_TRIPS,
 ):
     files = gtfs_files(source)
     if not files.get("trips.txt") or not files.get("stop_times.txt"):
@@ -260,45 +262,61 @@ def compile_gtfs(
         }
     print(f"  {len(routes):,} bus routes")
 
-    # One trip per route per direction: the longest, decided after stop_times is
-    # read, so collect candidate trips first and count them as we go.
+    # One trip per route per direction: the longest one sampled.  Sampling
+    # happens as trips are read, and the stop calls of the longest trip per
+    # line are the only ones kept (see `Sampler` and the fold below).
     print("Reading trips...")
-    candidates: dict[tuple[str, str], list[str]] = defaultdict(list)
+    samplers: dict[tuple[str, str], Sampler] = {}
     trips_per_route: dict[str, int] = defaultdict(int)
+    trip_lines: dict[str, tuple[str, str]] = {}
     trip_shape: dict[str, str] = {}
     for row in read_table(files["trips.txt"], ("route_id", "trip_id", "direction_id", "shape_id")):
         if row["route_id"] not in routes or not row["trip_id"]:
             continue
         direction = row["direction_id"] or "0"
-        candidates[(row["route_id"], direction)].append(sys.intern(row["trip_id"]))
+        line = (row["route_id"], direction)
+        trip_id = sys.intern(row["trip_id"])
+        samplers.setdefault(line, Sampler(line, sample)).add(trip_id)
         trips_per_route[row["route_id"]] += 1
         if row["shape_id"]:
-            trip_shape[row["trip_id"]] = row["shape_id"]
-    wanted_trips = {
-        trip for trips in candidates.values() for trip in _sample(trips)
-    }
+            trip_shape[trip_id] = row["shape_id"]
+    # Route and direction of every sampled trip, so stop_times can be folded
+    # into its line while it streams past.
+    trip_lines = {trip: sampler.line for sampler in samplers.values() for trip in sampler.kept}
+    wanted_trips = set(trip_lines)
     print(f"  {sum(trips_per_route.values()):,} trips; reading stop_times for {len(wanted_trips):,}")
 
     print("Reading stop_times...")
-    sequences: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
+    # line -> (trip_id, count, [(stop_id, time)]) for the longest trip seen.
+    best_calls: dict[tuple[str, str], tuple[str, int, list[tuple[str, str]]]] = {}
+    current_trip = ""
+    current_calls: list[tuple[int, str, str]] = []
     for row in read_table(
         files["stop_times.txt"], ("trip_id", "stop_id", "stop_sequence", "departure_time")
     ):
-        trip_id = sys.intern(row["trip_id"])
         stop_id = sys.intern(row["stop_id"])
-        if trip_id not in wanted_trips or stop_id not in stops:
+        if stop_id not in stops:
+            continue
+        trip_id = row["trip_id"]
+        if trip_id != current_trip:  # stop_times is grouped by trip
+            _fold_calls(best_calls, trip_lines, current_trip, current_calls)
+            current_trip, current_calls = trip_id, []
+        if trip_id not in trip_lines:
             continue
         try:
             sequence = int(float(row["stop_sequence"] or 0))
         except ValueError:
             sequence = 0
-        sequences[trip_id].append((sequence, stop_id, _clock(row["departure_time"])))
+        current_calls.append((sequence, stop_id, _clock(row["departure_time"])))
+    _fold_calls(best_calls, trip_lines, current_trip, current_calls)
 
     print("Reading shapes...")
     # Only the shapes the sampled trips actually use: a national feed carries
     # every operator's geometry, and holding all of it to draw 24,000 lines is
     # memory the runner does not have.
-    wanted_shapes = {trip_shape[trip] for trip in wanted_trips if trip in trip_shape}
+    wanted_shapes = {
+        trip_shape[trip_id] for trip_id, _, _ in best_calls.values() if trip_id in trip_shape
+    }
     shapes: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for row in read_table(files["shapes.txt"], ("shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence")):
         if row["shape_id"] not in wanted_shapes:
@@ -314,19 +332,10 @@ def compile_gtfs(
     # Two directions of one route are two different lines on the ground, so the
     # direction is part of the identity -- only genuine duplicates are dropped.
     seen: set[tuple] = set()
-    for (route_id, direction), trip_ids in sorted(candidates.items()):
+    for (route_id, direction), (trip_id, _, calls) in sorted(best_calls.items()):
         route = routes[route_id]
-        best: tuple[int, str, list[dict], list[str]] | None = None
-        for trip_id in trip_ids:
-            sequence = sorted(sequences.get(trip_id, ()))
-            called = [stops[stop_id] for _, stop_id, _ in sequence]
-            if len(called) < MIN_STOPS:
-                continue
-            if best is None or len(called) > best[0]:
-                best = (len(called), trip_id, called, [time for _, _, time in sequence])
-        if best is None:
-            continue
-        _, trip_id, called, times = best
+        called = [stops[stop_id] for stop_id, _ in calls]
+        times = [time for _, time in calls]
         shape = [
             (lat, lon)
             for _, lat, lon in sorted(shapes.get(trip_shape.get(trip_id, ""), []))
@@ -392,8 +401,35 @@ def compile_gtfs(
     print(f"operators:  {len({route['operator'] for route in compiled})}")
     print(f"stops:      {len({stop['atco'] for route in compiled for stop in route['stops']}):,}")
     peak_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-    print(f"peak memory: {peak_mb:,.0f} MB (the sample is {SAMPLE_TRIPS} trips per direction)")
+    print(
+        f"peak memory: {peak_mb:,.0f} MB (the sample was {sample} trips per direction)"
+    )
     print(f"wrote {describe(out)} ({size_mb:.1f} MB gzipped)")
+
+
+def _fold_calls(
+    best_calls: dict,
+    trip_lines: dict[str, tuple[str, str]],
+    trip_id: str,
+    calls: list[tuple[int, str, str]],
+) -> None:
+    """Remember the longest sampled trip on a line, and forget the rest.
+
+    One trip's stop calls are in memory at a time: a national feed has 1.5
+    million trips, and holding every sampled one is what ran a runner out of
+    memory before.
+    """
+    line = trip_lines.get(trip_id)
+    if line is None or len(calls) < MIN_STOPS:
+        return
+    previous = best_calls.get(line)
+    if previous is not None and previous[1] >= len(calls):
+        return
+    best_calls[line] = (
+        trip_id,
+        len(calls),
+        [(stop_id, time) for _, stop_id, time in sorted(calls)],
+    )
 
 
 def _clock(value: str) -> str:
@@ -415,23 +451,36 @@ def _clock(value: str) -> str:
     return f"{(hour % 24):02d}:{minute:02d}"
 
 
-def _sample(trip_ids: list[str], limit: int = SAMPLE_TRIPS) -> list[str]:
-    """A spread of trips to measure, rather than the first few in file order.
+class Sampler:
+    """Keeps at most `limit` trips per route and direction, evenly spread.
 
-    File order groups trips by service pattern, so a straight slice can measure
-    one branch and miss the trunk.  Evenly spaced sampling sees the whole day.
-
-    The limit is deliberately small.  Every sampled trip's stop calls are held
-    in memory while the feed is read: a national feed has 13,599 routes and 1.5
-    million trips, so sixty samples per direction asked the runner to hold
-    twelve million stop calls and it was killed for it (exit 143).  Twelve
-    samples still span the day -- the compiler only needs the longest trip, not
-    every one.
+    Reservoir sampling, so the sample spans the whole day without holding every
+    trip id in the feed.  That matters on a national feed: 1.5 million trip ids
+    is a lot of memory to spend on choosing fifty thousand of them, and the
+    earlier code held every trip's stop calls on top, which is what had a
+    runner killed for using too much (exit 143).
     """
-    if len(trip_ids) <= limit:
-        return trip_ids
-    step = len(trip_ids) / limit
-    return [trip_ids[int(index * step)] for index in range(limit)]
+
+    def __init__(self, line: tuple[str, str], limit: int) -> None:
+        self.line = line
+        self.limit = max(1, limit)
+        self.seen = 0
+        self.kept: list[str] = []
+        self._random = random.Random(20261007)
+
+    def add(self, trip_id: str) -> None:
+        self.seen += 1
+        if len(self.kept) < self.limit:
+            self.kept.append(trip_id)
+            return
+        # Replace an existing sample with a probability that keeps every trip
+        # equally likely to be the one kept, whatever order the feed is in.
+        index = self._random.randrange(self.seen)
+        if index < self.limit:
+            self.kept[index] = trip_id
+
+    def __bool__(self) -> bool:
+        return bool(self.kept)
 
 
 def load_agencies(paths: list[Member]) -> dict[str, str]:
@@ -479,6 +528,7 @@ def main() -> None:
         args.source,
         tolerance_m=args.tolerance,
         out=args.out,
+        sample=args.sample,
         agency_names=agency_names,
         prefix=(args.prefix + ":" if args.prefix else ""),
         region=args.region,

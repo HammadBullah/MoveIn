@@ -133,10 +133,10 @@ for region in "${REGIONS[@]}"; do
   # The compiler reads the GTFS tables out of the zip itself.  Unpacking first
   # needs 11 GB for the national file, which once killed a run at the commit
   # step on a full disk; this needs the 1.7 GB download and nothing more.
-  # Eight evenly spread trips per direction is plenty to find the trunk of a
-  # day, and memory follows the sample: the national file has 1.5 million trips.
+  # Twelve evenly spread trips per direction is plenty to find the trunk of a
+  # day.  Memory no longer follows the sample: the compiler keeps one trip's
+  # stop calls at a time (see Sampler in scripts/import_gtfs_routes.py).
   sample=12
-  [ "$region" = "all" ] && sample=8
   if python scripts/import_gtfs_routes.py \
       --source "$zip" \
       --out "$out" \
@@ -151,7 +151,6 @@ for region in "${REGIONS[@]}"; do
 
   # The published feed is big and reproducible; only the compiled result is kept.
   rm -f "$zip"
-  rm -rf "$dir"
   echo "   elapsed: $(elapsed) min, budget left: $(left) min"
 done
 
