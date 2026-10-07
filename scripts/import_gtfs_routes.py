@@ -34,6 +34,7 @@ import gzip
 import io
 import json
 import os
+import resource
 import sys
 import zipfile
 from collections import defaultdict
@@ -89,6 +90,9 @@ DEFAULT_OUT = ROOT / "backend/data/raw/real_bus_routes/compiled_bods.json.gz"
 
 #: A route with fewer named stops than this is a fragment, not a service.
 MIN_STOPS = 2
+
+#: How many trips per route and direction are measured.  See `_sample`.
+SAMPLE_TRIPS = 12
 
 #: Shapes are simplified to 12 m, which is invisible at any zoom a phone uses.
 DEFAULT_TOLERANCE_M = 12.0
@@ -266,7 +270,7 @@ def compile_gtfs(
         if row["route_id"] not in routes or not row["trip_id"]:
             continue
         direction = row["direction_id"] or "0"
-        candidates[(row["route_id"], direction)].append(row["trip_id"])
+        candidates[(row["route_id"], direction)].append(sys.intern(row["trip_id"]))
         trips_per_route[row["route_id"]] += 1
         if row["shape_id"]:
             trip_shape[row["trip_id"]] = row["shape_id"]
@@ -280,19 +284,25 @@ def compile_gtfs(
     for row in read_table(
         files["stop_times.txt"], ("trip_id", "stop_id", "stop_sequence", "departure_time")
     ):
-        if row["trip_id"] not in wanted_trips or row["stop_id"] not in stops:
+        trip_id = sys.intern(row["trip_id"])
+        stop_id = sys.intern(row["stop_id"])
+        if trip_id not in wanted_trips or stop_id not in stops:
             continue
         try:
             sequence = int(float(row["stop_sequence"] or 0))
         except ValueError:
             sequence = 0
-        sequences[row["trip_id"]].append(
-            (sequence, row["stop_id"], _clock(row["departure_time"]))
-        )
+        sequences[trip_id].append((sequence, stop_id, _clock(row["departure_time"])))
 
     print("Reading shapes...")
+    # Only the shapes the sampled trips actually use: a national feed carries
+    # every operator's geometry, and holding all of it to draw 24,000 lines is
+    # memory the runner does not have.
+    wanted_shapes = {trip_shape[trip] for trip in wanted_trips if trip in trip_shape}
     shapes: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for row in read_table(files["shapes.txt"], ("shape_id", "shape_pt_lat", "shape_pt_lon", "shape_pt_sequence")):
+        if row["shape_id"] not in wanted_shapes:
+            continue
         try:
             lat, lon = float(row["shape_pt_lat"]), float(row["shape_pt_lon"])
             order = int(float(row["shape_pt_sequence"] or 0))
@@ -381,6 +391,8 @@ def compile_gtfs(
     print(f"routes:     {len(compiled):,}")
     print(f"operators:  {len({route['operator'] for route in compiled})}")
     print(f"stops:      {len({stop['atco'] for route in compiled for stop in route['stops']}):,}")
+    peak_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    print(f"peak memory: {peak_mb:,.0f} MB (the sample is {SAMPLE_TRIPS} trips per direction)")
     print(f"wrote {describe(out)} ({size_mb:.1f} MB gzipped)")
 
 
@@ -403,11 +415,18 @@ def _clock(value: str) -> str:
     return f"{(hour % 24):02d}:{minute:02d}"
 
 
-def _sample(trip_ids: list[str], limit: int = 60) -> list[str]:
-    """A spread of trips to measure, rather than the first 60 in file order.
+def _sample(trip_ids: list[str], limit: int = SAMPLE_TRIPS) -> list[str]:
+    """A spread of trips to measure, rather than the first few in file order.
 
     File order groups trips by service pattern, so a straight slice can measure
     one branch and miss the trunk.  Evenly spaced sampling sees the whole day.
+
+    The limit is deliberately small.  Every sampled trip's stop calls are held
+    in memory while the feed is read: a national feed has 13,599 routes and 1.5
+    million trips, so sixty samples per direction asked the runner to hold
+    twelve million stop calls and it was killed for it (exit 143).  Twelve
+    samples still span the day -- the compiler only needs the longest trip, not
+    every one.
     """
     if len(trip_ids) <= limit:
         return trip_ids
@@ -434,6 +453,12 @@ def main() -> None:
         help="Short region tag for route ids, so feeds can be merged without colliding",
     )
     parser.add_argument("--region", default="", help="Human name of the feed being compiled")
+    parser.add_argument(
+        "--sample",
+        type=int,
+        default=SAMPLE_TRIPS,
+        help="Trips measured per route and direction (memory grows with this)",
+    )
     parser.add_argument(
         "--report",
         default=None,
