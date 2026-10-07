@@ -168,7 +168,15 @@ def route_type_is_bus(value: str) -> bool:
     return code == 3 or code == 11 or 200 <= code <= 209
 
 
-def compile_gtfs(source: Path, *, tolerance_m: float, out: Path, agency_names: dict[str, str]):
+def compile_gtfs(
+    source: Path,
+    *,
+    tolerance_m: float,
+    out: Path,
+    agency_names: dict[str, str],
+    prefix: str = "",
+    region: str = "",
+):
     files = gtfs_files(source)
     if not files.get("trips.txt") or not files.get("stop_times.txt"):
         raise SystemExit(
@@ -273,7 +281,7 @@ def compile_gtfs(source: Path, *, tolerance_m: float, out: Path, agency_names: d
         agency = route["agency_id"] or "unknown"
         compiled.append(
             {
-                "id": f"{route_id}~{direction}",
+                "id": f"{prefix}{route_id}~{direction}",
                 "service": route_id,
                 "number": route["number"],
                 "operator": agency_names.get(agency, agency),
@@ -302,6 +310,7 @@ def compile_gtfs(source: Path, *, tolerance_m: float, out: Path, agency_names: d
             "Bus routes, stops and shapes from operator TransXChange/GTFS data "
             "published on the DfT Bus Open Data Service (Open Government Licence v3.0)."
         ),
+        "region": region or source.name,
         "routes": compiled,
     }
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -341,6 +350,12 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     parser.add_argument("--tolerance", type=float, default=DEFAULT_TOLERANCE_M)
     parser.add_argument(
+        "--prefix",
+        default="",
+        help="Short region tag for route ids, so feeds can be merged without colliding",
+    )
+    parser.add_argument("--region", default="", help="Human name of the feed being compiled")
+    parser.add_argument(
         "--report",
         default=None,
         help="Also write this run's log here (else $MOVEIN_BODS_REPORT or $REPORT)",
@@ -357,7 +372,12 @@ def main() -> None:
     print(f"Compiling GTFS from {describe(args.source)}")
     agency_names = load_agencies(gtfs_files(args.source).get("agency.txt", []))
     compile_gtfs(
-        args.source, tolerance_m=args.tolerance, out=args.out, agency_names=agency_names
+        args.source,
+        tolerance_m=args.tolerance,
+        out=args.out,
+        agency_names=agency_names,
+        prefix=(args.prefix + ":" if args.prefix else ""),
+        region=args.region,
     )
 
 

@@ -1,70 +1,149 @@
 #!/usr/bin/env bash
 #
-# Fetch the national bus data where there is a network.
+# Fetch the published national bus data, where there is a network.
 #
-# This script is what the GitHub workflow runs, on a runner, because the sandbox
+# This script is what the GitHub workflow runs.  It exists because the sandbox
 # MoveIn is developed in cannot reach the DfT Bus Open Data Service at all: the
 # TLS handshake is dropped before a request is sent, and no API key changes that.
+# A runner has ordinary internet access, so the download happens there and the
+# compiled result is committed back to the repository.
 #
-# It is a script rather than a pile of YAML so that it can be read, reviewed and
-# syntax-checked like any other code -- and so the workflow file stays small
-# enough that a mistake in it is obvious.
+# How the data is fetched
+# -----------------------
 #
-# Everything it learns goes to stdout; the workflow tees that into
-# ops/last-run.txt and commits it, because the only channel out of a runner that
-# this environment can read is the repository itself.
+# BODS publishes its converted GTFS as one file per region, with no key needed:
 #
-#   Usage: ops/fetch-bods.sh [limit]
+#   https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/{region}/
 #
-# Environment:
-#   MOVEIN_BODS_API_KEY          optional; the catalogue is readable without one
-#   MOVEIN_BODS_ALLOW_ANONYMOUS  1 to carry on without a key
+# The per-operator datasets behind the API are richer, but listing them needs an
+# API key, and a runner cannot be given one here (the repository is public and
+# this environment cannot write repository secrets).  The regional files are the
+# published data too -- same service, same licence, converted by the same
+# pipeline -- and they need no credentials at all, so they are what this uses.
+#
+# Each region is compiled on its own into `compiled_bods_<region>.json.gz`, so a
+# run that runs out of time still commits everything it managed to do, and the
+# next run adds the next region.
+#
+#   Usage: ops/fetch-bods.sh [budget-minutes]
+#
+# Everything it prints is also written to the report file the workflow commits
+# (ops/last-run.txt), because a log on a runner is otherwise unreadable from
+# where this work is done.
 
 set -uo pipefail
 
-LIMIT="${1:-60}"
+BUDGET_MIN="${1:-100}"
+STARTED=$(date +%s)
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-echo "=== $(date -u +%FT%TZ) fetching real bus data ==="
-echo "key present: $([ -n "${MOVEIN_BODS_API_KEY:-}" ] && echo yes || echo no)"
-echo "limit: $LIMIT datasets"
+RAW="backend/data/raw/bulk_gtfs"
+OUT_DIR="backend/data/raw/real_bus_routes"
+BASE="https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file"
+
+# Regions worth having, most relevant to what MoveIn covers first.
+REGIONS=(
+  east_midlands
+  west_midlands
+  north_west
+  north_east
+  london
+  south_east
+  yorkshire
+  east_anglia
+  south_west
+  england
+  scotland
+  wales
+  all
+)
+
+elapsed() { echo $(( ($(date +%s) - STARTED) / 60 )); }
+left() { echo $(( BUDGET_MIN - $(elapsed) )); }
+
+echo "=== $(date -u +%FT%TZ) fetching published UK bus data ==="
+echo "budget: ${BUDGET_MIN} minutes; region files are compiled one at a time"
+echo
+
+echo "--- can this machine reach BODS, and does anything need a key? ---"
+getent hosts data.bus-data.dft.gov.uk | head -2
+echo -n "catalogue without a key: "
+curl -sS -o /tmp/catalogue.json -w 'HTTP %{http_code}\n' \
+  'https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1' || echo "request failed"
+head -c 120 /tmp/catalogue.json 2>/dev/null; echo
 
 echo
-echo "--- can this machine reach BODS? ---"
-getent hosts data.bus-data.dft.gov.uk || echo "no DNS for data.bus-data.dft.gov.uk"
-curl -sS -o /tmp/bods-catalogue.json -w 'catalogue (no key): HTTP %{http_code}, %{size_download} bytes\n' \
-  'https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1' || echo "catalogue request failed"
-head -c 300 /tmp/bods-catalogue.json 2>/dev/null
+echo "--- what regional files exist, and how big are they? ---"
+declare -A AVAILABLE
+for region in "${REGIONS[@]}"; do
+  headers=$(curl -sSIL --max-time 60 "$BASE/$region/" 2>&1 | tr -d '\r')
+  status=$(echo "$headers" | grep -oE '^HTTP/[0-9.]+ [0-9]{3}' | tail -1 | awk '{print $2}')
+  length=$(echo "$headers" | grep -i '^content-length:' | tail -1 | awk '{print $2}')
+  if [ "$status" = "200" ]; then
+    AVAILABLE["$region"]=1
+    printf '  %-14s HTTP 200  %s bytes (%.1f MB)\n' "$region" "${length:-?}" \
+      "$(awk -v b="${length:-0}" 'BEGIN { print b / 1048576 }')"
+  else
+    printf '  %-14s HTTP %s -- skipping\n' "$region" "${status:-?}"
+  fi
+done
+
+mkdir -p "$RAW" "$OUT_DIR"
 echo
-curl -sSL -o /tmp/bods-one.zip -w 'one dataset (no key): HTTP %{http_code}, %{size_download} bytes\n' \
-  'https://data.bus-data.dft.gov.uk/timetable/dataset/465/download/' || echo "download failed"
-ls -l /tmp/bods-one.zip 2>/dev/null || true
+echo "--- download, compile, one region at a time ---"
+
+for region in "${REGIONS[@]}"; do
+  [ -n "${AVAILABLE[$region]:-}" ] || continue
+  if [ "$(left)" -le 8 ]; then
+    echo "budget almost gone ($(elapsed) min elapsed), stopping before $region"
+    break
+  fi
+
+  zip="$RAW/$region.zip"
+  dir="$RAW/$region"
+  out="$OUT_DIR/compiled_bods_$region.json.gz"
+
+  if [ -f "$out" ]; then
+    echo "== $region: already compiled ($(du -h "$out" | cut -f1)) -- skipping"
+    continue
+  fi
+
+  echo
+  echo "== $region: downloading"
+  if ! curl -L --fail --retry 3 --retry-delay 5 --max-time 5400 -o "$zip" \
+      -w '   %{size_download} bytes in %{time_total}s\n' "$BASE/$region/"; then
+    echo "   download failed -- moving on"
+    rm -f "$zip"
+    continue
+  fi
+  echo "   on disk: $(du -h "$zip" | cut -f1)"
+
+  echo "== $region: unpacking"
+  rm -rf "$dir"
+  if ! unzip -o -q "$zip" -d "$dir"; then
+    echo "   unzip failed -- moving on"
+    continue
+  fi
+  echo "   unpacked: $(du -sh "$dir" | cut -f1); files: $(find "$dir" -name '*.txt' | wc -l)"
+
+  echo "== $region: compiling real routes into MoveIn's schema"
+  if python scripts/import_gtfs_routes.py \
+      --source "$dir" \
+      --out "$out" \
+      --prefix "$region" \
+      --region "$region"; then
+    echo "   compiled: $(du -h "$out" | cut -f1)"
+  else
+    echo "   compile failed -- leaving the feed for the next run"
+    continue
+  fi
+
+  # The published feed is big and reproducible; only the compiled result is kept.
+  rm -rf "$dir" "$zip"
+  echo "   elapsed: $(elapsed) min, budget left: $(left) min"
+done
 
 echo
-echo "--- python dependencies ---"
-python -m pip install --quiet httpx || echo "pip install failed"
-python -c 'import httpx, sys; print("httpx", httpx.__version__, "on", sys.version.split()[0])' || true
-
-echo
-echo "--- fetch: the cities MoveIn models, and their operators ---"
-python scripts/fetch_bods_gtfs.py \
-  --out backend/data/raw/bods \
-  --limit "$LIMIT" \
-  --area Nottingham --area Leicester --area Derby --area Coventry \
-  --area Birmingham --area Sheffield --area Leeds --area Manchester \
-  --area Milton Keynes --area Peterborough --area Slough --area Reading
-echo "fetch exit: $?"
-echo "datasets unpacked: $(find backend/data/raw/bods -name manifest.json 2>/dev/null | wc -l)"
-echo "gtfs tables: $(find backend/data/raw/bods -name '*.txt' 2>/dev/null | wc -l)"
-
-echo
-echo "--- compile: published routes into MoveIn's own schema ---"
-python scripts/import_gtfs_routes.py \
-  --source backend/data/raw/bods \
-  --out backend/data/raw/real_bus_routes/compiled_bods.json.gz
-echo "compile exit: $?"
-ls -l backend/data/raw/real_bus_routes/compiled_bods.json.gz 2>/dev/null || echo "no compiled file"
-
-echo
-echo "=== done $(date -u +%FT%TZ) ==="
+echo "=== $(date -u +%FT%TZ) result ==="
+ls -l "$OUT_DIR"/compiled_bods_*.json.gz 2>/dev/null || echo "nothing compiled"

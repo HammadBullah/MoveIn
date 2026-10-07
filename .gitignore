@@ -35,3 +35,4 @@ backend/data/generated/
 
 # TypeScript build info
 frontend/tsconfig.tsbuildinfo
+backend/data/raw/bulk_gtfs/
