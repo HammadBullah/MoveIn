@@ -151,9 +151,50 @@ p {
   width: 100%;
   max-width: 452px;
   height: 100dvh;
-  min-height: 620px;
+  /* A short phone (an iPhone SE is 568 px tall) must not have its tab bar
+     pushed below the fold by a desktop-sized minimum. */
+  min-height: min(620px, 100dvh);
   background: var(--bg);
   overflow: hidden;
+}
+
+@media (max-width: 360px) {
+  :root {
+    --tabbar: 62px;
+  }
+
+  .screen {
+    padding-left: 13px;
+    padding-right: 13px;
+    gap: 15px;
+  }
+
+  .jcard {
+    padding: 13px 13px 12px;
+  }
+
+  .jcard__price strong {
+    font-size: 1.24rem;
+  }
+
+  .sheet__header {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+@media (min-width: 560px) and (max-width: 899px) {
+  /* Tablets: keep the phone's proportions, give it air and a soft edge instead
+     of letting the cards stretch into a wide web page. */
+  .app {
+    padding: 18px 0;
+  }
+
+  .phone {
+    height: min(940px, calc(100dvh - 36px));
+    border-radius: 30px;
+    box-shadow: var(--shadow-2);
+  }
 }
 
 @media (min-width: 900px) {
