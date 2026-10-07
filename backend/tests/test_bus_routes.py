@@ -1,0 +1,154 @@
+"""The real bus network: the routes operators publish, and what they answer.
+
+Every test here is about a claim the product makes out loud, so each one checks
+the claim rather than the implementation: that the numbers on the screen are the
+numbers in the data, that a route's stops are the ones its operator publishes,
+that a corridor question returns real service numbers, and that the layer never
+pretends to know a departure time it does not have.
+"""
+
+from __future__ import annotations
+
+from backend.app.domain.real_bus import get_real_bus_network
+
+
+def test_the_real_bus_network_is_loaded():
+    net = get_real_bus_network()
+    assert net is not None, "compile it with scripts/import_real_bus_routes.py"
+    assert net.routes, "the real bus network is empty"
+
+
+def test_coverage_counts_what_is_actually_there(client):
+    payload = client.get("/api/bus/coverage").json()
+    net = get_real_bus_network()
+    assert payload["routes"] == len(net.routes)
+    assert payload["named_stops"] == len(net.stops())
+    assert payload["operators"] >= 5
+    # The route counts per operator must add up to the total, or the figures on
+    # the data screen would contradict the list behind them.
+    assert sum(payload["routes_per_operator"].values()) == payload["routes"]
+
+
+def test_the_layer_says_it_has_no_times(client):
+    """A route shape is not a timetable, and the API must not imply otherwise."""
+    for path in ("/api/bus/coverage", "/api/bus/routes", "/api/bus/map"):
+        assert client.get(path).json()["has_times"] is False
+    body = client.get("/api/bus/coverage").json()
+    assert "no departure times" in body["note"].lower()
+    assert "1,700" in body["coverage_note"] or "1700" in body["coverage_note"]
+
+
+def test_a_route_number_finds_the_real_route(client):
+    found = client.get("/api/bus/routes?q=148").json()
+    assert found["count"] >= 1
+    route = next(item for item in found["routes"] if item["number"] == "148")
+    assert "Stagecoach" in route["operator"]
+    assert route["stop_count"] > 50, "the 148 is a long inter-urban route"
+    assert route["from"] and route["to"]
+
+
+def test_a_routes_stops_are_named_real_stops_in_order(client):
+    listing = client.get("/api/bus/routes?q=148").json()
+    detail = client.get(f"/api/bus/routes/{listing['routes'][0]['id']}").json()
+    assert len(detail["stops"]) == detail["stop_count"] > 2
+    assert len(detail["shape"]) == detail["shape_points"] >= 2
+    names = [stop["name"] for stop in detail["stops"]]
+    assert all(name.strip() for name in names), "a stop with no name is not a stop"
+    assert all(stop["atco"] for stop in detail["stops"])
+    # Every stop is a real NaPTAN point, so its coordinates are real.
+    for stop in detail["stops"]:
+        assert 49.0 < stop["lat"] < 61.5 and -8.5 < stop["lon"] < 2.5
+
+
+def test_an_unknown_route_is_a_404(client):
+    assert client.get("/api/bus/routes/no-such-route~1").status_code == 404
+
+
+def test_a_corridor_returns_the_service_that_runs_it(client):
+    body = client.get("/api/bus/between?origin=Coventry&destination=Leicester").json()
+    assert body["count"] >= 1
+    option = body["options"][0]
+    assert option["number"] == "148"
+    assert "Coventry" in option["board"]["name"] or "TRINITY" in option["board"]["name"]
+    assert option["stops_travelled"] > 10
+    assert option["direction"] in {"forward", "reverse"}
+    assert option["calls_at"], "a service between two places calls at places"
+
+
+def test_a_corridor_works_the_other_way_round(client):
+    """The operator publishes the 148 into Leicester; the return must still answer."""
+    back = client.get("/api/bus/between?origin=Leicester&destination=Coventry").json()
+    assert back["count"] >= 1
+    option = back["options"][0]
+    assert option["number"] == "148"
+    assert "Leicester" in option["board"]["name"] or "Margaret" in option["board"]["name"]
+
+
+def test_the_oxford_banbury_corridor_is_found(client):
+    """The bug that started this: "Banbury" once meant a street in Coventry.
+
+    With the town naming fixed, the real S4 between Oxford and Banbury is
+    findable, which is the difference between a coverage claim and a wrong one.
+    """
+    body = client.get("/api/bus/between?origin=Oxford&destination=Banbury").json()
+    assert body["count"] >= 1, body
+    assert body["origin"]["label"] == "Oxford"
+    assert body["destination"]["label"] == "Banbury"
+    assert body["destination"]["lat"] > 51.9, "Banbury is in Oxfordshire, not Coventry"
+    assert any(option["number"] == "S4" for option in body["options"])
+
+
+def test_a_corridor_with_no_service_says_so_instead_of_guessing(client):
+    body = client.get("/api/bus/between?origin=Whitby&destination=Penzance").json()
+    assert body["count"] == 0
+    assert body["options"] == []
+
+
+def test_an_unresolvable_place_is_an_error_not_a_guess(client):
+    response = client.get("/api/bus/between?origin=Nowhere-at-all&destination=Leicester")
+    assert response.status_code == 404
+    assert "Nowhere-at-all" in response.json()["detail"]
+
+
+def test_the_map_payload_is_drawable(client):
+    body = client.get("/api/bus/map?operator=Redline").json()
+    assert body["count"] == body["total_matching"] >= 1
+    assert body["truncated"] is False
+    for feature in body["features"]:
+        assert len(feature["coordinates"]) >= 2
+        assert feature["stop_count"] >= 2
+        for lat, lon in feature["coordinates"]:
+            assert 49.0 < lat < 61.5 and -8.5 < lon < 2.5
+
+
+def test_the_map_simplifies_when_asked(client):
+    raw = client.get("/api/bus/map").json()
+    trimmed = client.get("/api/bus/map?simplify_m=150").json()
+    raw_points = sum(len(f["coordinates"]) for f in raw["features"])
+    trimmed_points = sum(len(f["coordinates"]) for f in trimmed["features"])
+    assert trimmed_points < raw_points
+    # Trimming is for the phone; it must not change which routes are drawn.
+    assert trimmed["count"] == raw["count"]
+
+
+def test_a_capped_map_still_shows_every_operator(client):
+    """A capped list must not be one company's network presented as the country."""
+    body = client.get("/api/bus/map?limit=20").json()
+    assert body["truncated"] is True
+    operators = {feature["operator"] for feature in body["features"]}
+    assert len(operators) >= 3
+
+
+def test_bus_routes_filter_by_operator(client):
+    operators = client.get("/api/bus/operators").json()
+    assert operators["count"] >= 5
+    name = operators["operators"][0]["name"]
+    listed = client.get(f"/api/bus/routes?operator={name}&limit=200").json()
+    assert listed["count"] >= 1
+    assert {route["operator"] for route in listed["routes"]} == {name}
+
+
+def test_every_operator_knows_its_own_route_count(client):
+    body = client.get("/api/bus/operators").json()
+    for entry in body["operators"]:
+        assert entry["routes"] >= entry["services"] >= 1

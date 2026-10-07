@@ -1,0 +1,57 @@
+{
+  "sources": [
+    {
+      "file": "Arriva_Beds_and_Bucks_OP58.geojson",
+      "lines": 198,
+      "routes_kept": 71,
+      "operator": "Arriva Beds and Bucks"
+    },
+    {
+      "file": "Arriva_Herts_and_Essex_OP50.geojson",
+      "lines": 331,
+      "routes_kept": 18,
+      "operator": "Arriva Herts and Essex"
+    },
+    {
+      "file": "Red_Rose_Travel_OP362.geojson",
+      "lines": 273,
+      "routes_kept": 28,
+      "operator": "Red Rose Travel"
+    },
+    {
+      "file": "Redline_OP71.geojson",
+      "lines": 34,
+      "routes_kept": 3,
+      "operator": "Redline"
+    },
+    {
+      "file": "midlands.geojson",
+      "lines": 1250,
+      "routes_kept": 276,
+      "operator": "Stagecoach Midlands"
+    },
+    {
+      "file": "stagecoach_oxford_routes.geojson",
+      "lines": 152,
+      "routes_kept": 118,
+      "operator": "Stagecoach Midlands"
+    }
+  ],
+  "routes": 514,
+  "routes_with_stops": 514,
+  "lines": 2238,
+  "vertices_in": 621563,
+  "vertices_out": 57935,
+  "stops_matched": 4089,
+  "unique_stops": 694,
+  "operators": {
+    "Arriva Beds and Bucks": 71,
+    "Arriva Herts and Essex": 18,
+    "Red Rose Travel": 28,
+    "Redline": 3,
+    "Stagecoach Midlands": 394
+  },
+  "tolerance_m": 12.0,
+  "match_radius_m": 40.0,
+  "services": 144
+}

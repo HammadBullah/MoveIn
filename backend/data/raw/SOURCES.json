@@ -1,0 +1,131 @@
+{
+  "atoc_agencies": 69,
+  "generated_at": "2026-10-07T06:55:19Z",
+  "live_feeds_not_fetched": {
+    "bods_fares": {
+      "adapter": "app.ingest.bods",
+      "auth": "BODS_API_KEY (free registration)",
+      "endpoint": "https://data.bus-data.dft.gov.uk/api/v1/fares/dataset/",
+      "format": "NeTEx Fares / GTFS-Fares",
+      "licence": "Open Government Licence v3.0",
+      "publisher": "DfT Bus Open Data Service"
+    },
+    "bods_siri_vm": {
+      "adapter": "app.ingest.bods",
+      "auth": "BODS_API_KEY (free registration)",
+      "endpoint": "https://data.bus-data.dft.gov.uk/api/v1/datafeed/",
+      "format": "SIRI-VM (live vehicle positions)",
+      "licence": "Open Government Licence v3.0",
+      "publisher": "DfT Bus Open Data Service"
+    },
+    "bods_timetables": {
+      "adapter": "app.ingest.bods",
+      "auth": "BODS_API_KEY (free registration)",
+      "endpoint": "https://data.bus-data.dft.gov.uk/api/v1/dataset/",
+      "format": "TransXChange XML / GTFS",
+      "licence": "Open Government Licence v3.0",
+      "publisher": "DfT Bus Open Data Service"
+    },
+    "nptg": {
+      "adapter": "app.ingest.nptg",
+      "auth": "None",
+      "endpoint": "https://beta-naptan.dft.gov.uk/",
+      "format": "NPTG CSV (Localities, AdjacentLocality, AdminAreas)",
+      "licence": "Open Government Licence v3.0",
+      "publisher": "Department for Transport"
+    },
+    "osm_overpass": {
+      "adapter": "app.ingest.osm",
+      "auth": "None (fair-use rate limits)",
+      "endpoint": "https://overpass-api.de/api/interpreter",
+      "format": "Overpass QL (pedestrian/cycle network)",
+      "licence": "Open Database Licence (ODbL)",
+      "publisher": "OpenStreetMap contributors"
+    },
+    "tfl_unified": {
+      "adapter": "app.ingest.tfl",
+      "auth": "app_key (optional for low volume)",
+      "endpoint": "https://api.tfl.gov.uk/",
+      "format": "TfL Unified API (JSON) / GTFS",
+      "licence": "TfL Open Data Licence",
+      "publisher": "Transport for London"
+    }
+  },
+  "named_stops": 42502,
+  "naptan": {
+    "by_region": {
+      "birmingham": 14070,
+      "bradford": 1349,
+      "burton-on-trent": 990,
+      "chesterfield": 1264,
+      "coventry": 2744,
+      "crewe": 808,
+      "derby": 2570,
+      "doncaster": 1865,
+      "east-midlands-parkway": 23,
+      "grantham": 393,
+      "leeds": 9324,
+      "leicester": 3014,
+      "lichfield": 414,
+      "london": 33170,
+      "long-eaton": 4,
+      "loughborough": 562,
+      "manchester": 18231,
+      "milton-keynes": 1461,
+      "nottingham": 5513,
+      "nuneaton": 767,
+      "peterborough": 1197,
+      "reading": 1769,
+      "rugby": 576,
+      "sheffield": 6654,
+      "slough": 901,
+      "stockport": 10,
+      "stoke-on-trent": 2771,
+      "tamworth": 551,
+      "wakefield": 470,
+      "wolverhampton": 1414,
+      "york": 1255
+    },
+    "gzip_bytes": 1514729,
+    "kept": 116104,
+    "total_scanned": 433609
+  },
+  "rail_stations": 10009,
+  "sources": [
+    {
+      "description": "Every public transport access point in Great Britain (bus stops, rail stations, tram stops, metro stations, ferry terminals, airports) with ATCO codes, coordinates, NPTG locality codes and administrative geography codes.",
+      "licence": "Open Government Licence v3.0",
+      "name": "naptan_access_points.csv",
+      "origin": "https://github.com/odileeds/NAPTAN/NAPTAN.csv",
+      "publisher": "Department for Transport (via ODI Leeds)"
+    },
+    {
+      "description": "Real NaPTAN stop names with coordinates, for access points that are absent from the UK2GTFS working extract.",
+      "licence": "Open Government Licence v3.0",
+      "name": "naptan_names.csv",
+      "origin": "https://github.com/itsleeds/UK2GTFS-data/data/raw/naptan_missing.csv",
+      "publisher": "Department for Transport (via UK2GTFS / ITS Leeds)"
+    },
+    {
+      "description": "Corrected/renamed NaPTAN access points with real stop names.",
+      "licence": "Open Government Licence v3.0",
+      "name": "naptan_replacements.csv",
+      "origin": "https://github.com/itsleeds/UK2GTFS-data/data/raw/naptan_replace.csv",
+      "publisher": "Department for Transport (via UK2GTFS / ITS Leeds)"
+    },
+    {
+      "description": "GB railway timing points (TIPLOCs) with CRS station codes and coordinates, used to build the rail layer of the network.",
+      "licence": "Open Government Licence v3.0",
+      "name": "rail_stations.csv",
+      "origin": "https://github.com/itsleeds/UK2GTFS-data/data/raw/tiplocs.csv",
+      "publisher": "Network Rail / RDG (via UK2GTFS / ITS Leeds)"
+    },
+    {
+      "description": "Train Operating Company registry: ATOC codes, names and URLs.",
+      "licence": "Open Government Licence v3.0",
+      "name": "atoc_agencies.csv",
+      "origin": "https://github.com/itsleeds/UK2GTFS-data/data/raw/atoc_agency.csv",
+      "publisher": "ATOC / RDG (via UK2GTFS / ITS Leeds)"
+    }
+  ]
+}

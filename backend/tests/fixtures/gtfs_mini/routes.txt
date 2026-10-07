@@ -1,0 +1,4 @@
+route_id,agency_id,route_short_name,route_long_name,route_type
+R1,OP1,101,Alpha - Delta,3
+R2,OP1,X1,Express to nowhere,3
+R9,OP1,900,Rail replacement,700

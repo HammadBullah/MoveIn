@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend/dist/
+.vite/
+
+# Local caches and downloaded source material (re-fetch with scripts/fetch_real_data.py)
+.cache/
+
+# Secrets.  The BODS API key lives here, never in the repository.
+.env
+.env.local
+
+# Raw operator route geometry, 47 MB and derivable:
+# re-fetch with scripts/fetch_real_bus_routes.py, compile with
+# scripts/import_real_bus_routes.py.  The compiled file *is* committed.
+backend/data/raw/real_bus_routes/*.geojson
+backend/data/raw/bods/
+
+# Generated at runtime from the compiled network
+backend/data/movein.db
+
+# SQLite sidecar files
+backend/data/movein.db-*
+
+# Compiled feed and GTFS artefacts (rebuild with the command in README.md)
+backend/data/generated/
+
+# TypeScript build info
+frontend/tsconfig.tsbuildinfo
