@@ -376,6 +376,8 @@ export interface RealBusStop {
   name: string
   lat: number
   lon: number
+  /** The published departure time for the representative trip, HH:MM. */
+  time?: string
 }
 
 export interface RealBusRouteSummary {
@@ -395,6 +397,7 @@ export interface RealBusRouteDetail extends RealBusRouteSummary {
   shape: [number, number][]
   shape_points: number
   has_times: boolean
+  times_note?: string
   attribution: string
 }
 
@@ -408,6 +411,7 @@ export interface RealBusCoverage {
   named_stops: number
   stop_calls: number
   shape_points: number
+  routes_with_times?: number
   attribution: string
   has_times: boolean
   note: string

@@ -628,10 +628,24 @@ async function main() {
     /to /.test(busRows[0]?.textContent || ''),
     (busRows[0]?.textContent || '').slice(0, 90),
   )
+  // Whether this layer has times is a property of the published data, so ask
+  // the API and hold the screen to the same answer: never a clock it does not
+  // have, never a placeholder when it does.
+  const busCoverage = await fetch(`${API}/api/bus/coverage`)
+    .then((r) => r.json())
+    .catch(() => null)
+  const showsClock = /\b\d{1,2}:\d{2}\b/.test(busText)
   check(
-    'the bus screen never shows a clock it does not have',
-    !/\b\d{1,2}:\d{2}\b/.test(busText) && !busText.includes('--:--'),
-    'no departure times on the real bus layer',
+    busCoverage?.has_times
+      ? 'the bus screen shows the published times the layer has'
+      : 'the bus screen never shows a clock it does not have',
+    busCoverage?.has_times ? showsClock : !showsClock,
+    `api says has_times=${Boolean(busCoverage?.has_times)}`,
+  )
+  check(
+    'the bus screen never shows a placeholder time',
+    !busText.includes('--:--'),
+    'no --:-- in the bus screen',
   )
 
   // Between two places: the corridor answer, with the stop to board at.

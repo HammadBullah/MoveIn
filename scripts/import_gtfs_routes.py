@@ -223,15 +223,19 @@ def compile_gtfs(
     print(f"  {sum(trips_per_route.values()):,} trips; reading stop_times for {len(wanted_trips):,}")
 
     print("Reading stop_times...")
-    sequences: dict[str, list[tuple[int, str]]] = defaultdict(list)
-    for row in read_table(files["stop_times.txt"], ("trip_id", "stop_id", "stop_sequence")):
+    sequences: dict[str, list[tuple[int, str, str]]] = defaultdict(list)
+    for row in read_table(
+        files["stop_times.txt"], ("trip_id", "stop_id", "stop_sequence", "departure_time")
+    ):
         if row["trip_id"] not in wanted_trips or row["stop_id"] not in stops:
             continue
         try:
             sequence = int(float(row["stop_sequence"] or 0))
         except ValueError:
             sequence = 0
-        sequences[row["trip_id"]].append((sequence, row["stop_id"]))
+        sequences[row["trip_id"]].append(
+            (sequence, row["stop_id"], _clock(row["departure_time"]))
+        )
 
     print("Reading shapes...")
     shapes: dict[str, list[tuple[float, float]]] = defaultdict(list)
@@ -249,17 +253,17 @@ def compile_gtfs(
     seen: set[tuple] = set()
     for (route_id, direction), trip_ids in sorted(candidates.items()):
         route = routes[route_id]
-        best: tuple[int, str, list[dict]] | None = None
+        best: tuple[int, str, list[dict], list[str]] | None = None
         for trip_id in trip_ids:
             sequence = sorted(sequences.get(trip_id, ()))
-            called = [stops[stop_id] for _, stop_id in sequence]
+            called = [stops[stop_id] for _, stop_id, _ in sequence]
             if len(called) < MIN_STOPS:
                 continue
             if best is None or len(called) > best[0]:
-                best = (len(called), trip_id, called)
+                best = (len(called), trip_id, called, [time for _, _, time in sequence])
         if best is None:
             continue
-        _, trip_id, called = best
+        _, trip_id, called, times = best
         shape = [
             (lat, lon)
             for _, lat, lon in sorted(shapes.get(trip_shape.get(trip_id, ""), []))
@@ -293,9 +297,12 @@ def compile_gtfs(
                         "name": stop["name"],
                         "lat": round(stop["lat"], 5),
                         "lon": round(stop["lon"], 5),
+                        "time": times[index] if index < len(times) else "",
                     }
-                    for stop in called
+                    for index, stop in enumerate(called)
                 ],
+                "has_times": any(times),
+                "sample_trip": trip_id,
                 "shape": [[round(lat, 5), round(lon, 5)] for lat, lon in shape],
                 "trips": trips_per_route[route_id],
             }
@@ -322,6 +329,25 @@ def compile_gtfs(
     print(f"operators:  {len({route['operator'] for route in compiled})}")
     print(f"stops:      {len({stop['atco'] for route in compiled for stop in route['stops']}):,}")
     print(f"wrote {describe(out)} ({size_mb:.1f} MB gzipped)")
+
+
+def _clock(value: str) -> str:
+    """GTFS times are HH:MM:SS, and run past midnight as 24:15:00.
+
+    A passenger reads a clock, not a service day, so the hour wraps: the 00:15
+    departure of a Friday night service is published as 24:15 and shown as
+    00:15, which is what the timetable on the bus stop says.
+    """
+    if not value:
+        return ""
+    parts = value.strip().split(":")
+    if len(parts) < 2:
+        return ""
+    try:
+        hour, minute = int(parts[0]), int(parts[1])
+    except ValueError:
+        return ""
+    return f"{(hour % 24):02d}:{minute:02d}"
 
 
 def _sample(trip_ids: list[str], limit: int = 60) -> list[str]:

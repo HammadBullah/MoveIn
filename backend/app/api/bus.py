@@ -61,14 +61,23 @@ def bus_coverage() -> dict:
     """
     net = network_or_404()
     stats = net.stats()
+    with_times = int(stats.get("routes_with_times", 0))
     return {
         **stats,
-        "has_times": False,
+        "has_times": with_times > 0,
         "note": (
             "Real published bus routes with their real stops and shapes, imported "
-            "from operator TransXChange data via the DfT Bus Open Data Service. "
-            "This layer carries no departure times: timetables in MoveIn are the "
-            "separate compiled layer, and journey planning uses that."
+            "from the data operators publish through the DfT Bus Open Data "
+            "Service. "
+            + (
+                f"{with_times:,} of them also carry the departure times the "
+                "operator published for one representative trip; the rest are "
+                "shapes and stops only. Journey planning still uses MoveIn's "
+                "compiled timetable layer."
+                if with_times
+                else "This layer carries no departure times: timetables in MoveIn "
+                "are the separate compiled layer, and journey planning uses that."
+            )
         ),
         "coverage_note": (
             "This is a real, growing slice of the national bus network -- not all "
@@ -144,7 +153,13 @@ def bus_route(route_id: str, precision: int = Query(default=5, ge=3, le=6)) -> d
     if route is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no such route")
     payload = route.payload(precision=precision, shape=True)
-    payload["has_times"] = False
+    payload["has_times"] = route.has_times
+    if route.has_times:
+        payload["times_note"] = (
+            "Each stop shows the departure time published in the operator's own "
+            "feed for the one representative trip MoveIn keeps -- schedule, not "
+            "live running."
+        )
     payload["attribution"] = net.attribution
     return payload
 

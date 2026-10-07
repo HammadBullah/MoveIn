@@ -3237,6 +3237,23 @@ input[type='range']::-webkit-slider-thumb {
   color: var(--ink-2);
 }
 
+.bus__stop-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.bus__stop-time {
+  margin-left: auto;
+  padding-left: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.bus__times-note {
+  margin: 0 0 6px;
+}
+
 .bus__stop-dot {
   width: 7px;
   height: 7px;

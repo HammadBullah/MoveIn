@@ -106,8 +106,12 @@ export function BusScreen({ onBack, from, to }: { onBack: () => void; from?: str
             {coverage.routes} real routes · {coverage.services} services · {coverage.operators} operators
           </strong>
           <span className="muted tiny">
-            {coverage.named_stops} named stops, straight from the operators' own published data. No departure
-            times in this layer — timetables are compiled separately, and the planning engine uses those.
+            {coverage.named_stops} named stops, straight from the operators' own published data.{' '}
+            {coverage.routes_with_times
+              ? `${coverage.routes_with_times} of these routes also carry the departure times the ` +
+                `operator published for one representative trip.`
+              : 'No departure times in this layer — timetables are compiled separately, and the planning ' +
+                'engine uses those.'}
           </span>
         </div>
       )}
@@ -259,11 +263,18 @@ export function BusScreen({ onBack, from, to }: { onBack: () => void; from?: str
                 {detail.stops.length} stops, {detail.shape_points} shape points
                 {detail.description ? ` · ${detail.description}` : ''}
               </p>
+              {detail.has_times && (
+                <p className="muted tiny bus__times-note">
+                  {detail.times_note ||
+                    'The times are the schedule the operator published for one representative trip.'}
+                </p>
+              )}
               <ol className="bus__stops-list">
                 {detail.stops.map((stop, index) => (
                   <li key={`${stop.atco}-${index}`}>
                     <span className="bus__stop-dot" aria-hidden />
-                    <span>{stop.name}</span>
+                    <span className="bus__stop-name">{stop.name}</span>
+                    {stop.time ? <span className="bus__stop-time">{stop.time}</span> : null}
                   </li>
                 ))}
               </ol>

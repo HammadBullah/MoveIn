@@ -100,14 +100,20 @@ class RealBusStop:
     name: str
     lat: float
     lon: float
+    #: The departure time the published feed gives this stop for the one trip
+    #: MoveIn keeps, as HH:MM.  Empty when the feed carries no times.
+    time: str = ""
 
     def payload(self, precision: int = DEFAULT_PRECISION) -> dict:
-        return {
+        payload = {
             "atco": self.atco,
             "name": self.name,
             "lat": round(self.lat, precision),
             "lon": round(self.lon, precision),
         }
+        if self.time:
+            payload["time"] = self.time
+        return payload
 
 
 @dataclass(frozen=True)
@@ -125,6 +131,11 @@ class RealBusRoute:
     #: variations -- both directions, branches, school-day extras -- and they
     #: are different lines on the ground, so each is its own route record.
     service: str = ""
+
+    @property
+    def has_times(self) -> bool:
+        """Whether the published feed gave this line any clock times."""
+        return any(stop.time for stop in self.stops)
 
     @property
     def name(self) -> str:
@@ -203,6 +214,7 @@ class RealBusNetwork:
                         name=str(stop["name"]),
                         lat=float(stop["lat"]),
                         lon=float(stop["lon"]),
+                        time=str(stop.get("time") or ""),
                     )
                     for stop in raw.get("stops", [])
                 ),
@@ -426,6 +438,7 @@ class RealBusNetwork:
                 for operator in operators
             },
             "named_stops": len(stops),
+            "routes_with_times": sum(1 for route in self.routes.values() if route.has_times),
             "stop_calls": sum(len(route.stops) for route in self.routes.values()),
             "shape_points": sum(len(route.shape) for route in self.routes.values()),
             "attribution": self.attribution,
