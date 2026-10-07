@@ -1,0 +1,18 @@
+# Runtime dependencies for the MoveIn API.
+#
+# Everything here is a real, current release.  The prototype runs on SQLite, so
+# the PostgreSQL/PostGIS driver is not required yet -- when the deployment moves
+# to PostGIS, add psycopg[binary] and geoalchemy2 here and change the URL in
+# backend/app/config.py.  Nothing else in the codebase needs to change.
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30
+pydantic>=2.7,<3.0
+pydantic-settings>=2.3
+SQLAlchemy>=2.0,<3.0
+
+# orjson is optional: the API falls back to the standard library encoder.
+orjson>=3.10 ; platform_python_implementation == "CPython"
+
+# Development and test dependencies.
+pytest>=8.0
+httpx>=0.27
