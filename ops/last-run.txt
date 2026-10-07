@@ -1,0 +1,42 @@
+report file: 'ops/last-run.txt' (cwd /home/runner/work/MoveIn/MoveIn)
+=== 2026-10-07T15:19:40Z fetching real bus data ===
+key present: no
+limit: 60 datasets
+
+--- can this machine reach BODS? ---
+3.168.51.61     data.bus-data.dft.gov.uk
+3.168.51.105    data.bus-data.dft.gov.uk
+3.168.51.71     data.bus-data.dft.gov.uk
+3.168.51.36     data.bus-data.dft.gov.uk
+catalogue (no key): HTTP 401, 58 bytes
+{"detail":"Authentication credentials were not provided."}
+one dataset (no key): HTTP 200, 8722654 bytes
+-rw-r--r-- 1 runner runner 8722654 Oct  7 15:19 /tmp/bods-one.zip
+
+--- python dependencies ---
+httpx 0.28.1 on 3.12.15
+
+--- fetch: the cities MoveIn models, and their operators ---
+usage: fetch_bods_gtfs.py [-h] [--api-key API_KEY] [--out OUT] [--area AREA]
+                          [--noc NOC] [--text TEXT] [--all] [--limit LIMIT]
+                          [--list] [--dry-run] [--report REPORT] [--no-probe]
+fetch_bods_gtfs.py: error: unrecognized arguments: Keynes
+fetch exit: 2
+datasets unpacked: 0
+gtfs tables: 0
+
+--- compile: published routes into MoveIn's own schema ---
+
+--- compile report opened 2026-10-07T15:19:43+00:00 ---
+backend/data/raw/bods does not exist.  Fetch some data first:
+  MOVEIN_BODS_API_KEY=... python scripts/fetch_bods_gtfs.py --area Nottingham
+
+--- compile report opened 2026-10-07T15:19:43+00:00 ---
+backend/data/raw/bods does not exist.  Fetch some data first:
+  MOVEIN_BODS_API_KEY=... python scripts/fetch_bods_gtfs.py --area Nottingham
+compile exit: 1
+no compiled file
+
+=== done 2026-10-07T15:19:43Z ===
+=== commit 2026-10-07T15:19:44Z ===
+report: -rw-r--r-- 1 runner runner 1581 Oct  7 15:19 ops/last-run.txt
