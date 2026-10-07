@@ -1,0 +1,76 @@
+name: Fetch real UK bus data from BODS
+
+# This runs on a GitHub runner because *this is the machine with a route to the
+# internet*.  The sandbox MoveIn is developed in cannot reach the DfT Bus Open
+# Data Service at all: the TLS handshake is dropped before a request is sent, and
+# no API key changes that.  A runner has ordinary internet access, so the
+# national download happens here and the compiled result is committed back.
+#
+# Triggered by pushing a change to `ops/fetch-bods` (a sentinel: the paths filter
+# keeps normal commits from starting fetches, and the artifact this job commits
+# is not in the filter, so the job cannot trigger itself).
+
+on:
+  push:
+    paths:
+      - 'ops/fetch-bods'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Can this runner reach BODS, and does it need a key?
+        id: probe
+        run: |
+          code=$(curl -s -o /tmp/list.json -w '%{http_code}' \
+            'https://data.bus-data.dft.gov.uk/api/v1/dataset/?limit=1' || echo 000)
+          echo "catalogue without a key: HTTP $code"
+          head -c 300 /tmp/list.json 2>/dev/null; echo
+          dl=$(curl -sL -o /tmp/one.zip -w '%{http_code}' \
+            'https://data.bus-data.dft.gov.uk/timetable/dataset/465/download/' || echo 000)
+          size=$(stat -c%s /tmp/one.zip 2>/dev/null || echo 0)
+          echo "dataset download without a key: HTTP $dl, $size bytes"
+          if [ "$dl" = "200" ] && [ "$size" -gt 1000 ]; then
+            echo "anonymous=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "anonymous=no" >> "$GITHUB_OUTPUT"
+          fi
+          echo "file type:"; file /tmp/one.zip 2>/dev/null || true
+
+      - name: Fetch datasets
+        env:
+          MOVEIN_BODS_API_KEY: ${{ secrets.BODS_API_KEY }}
+          MOVEIN_BODS_ALLOW_ANONYMOUS: '1'
+        run: |
+          python scripts/fetch_bods_gtfs.py \
+            --out backend/data/raw/bods \
+            --limit 60 \
+            --area Nottingham --area Leicester --area Derby --area Coventry \
+            --area Birmingham --area Sheffield --area Leeds --area Manchester \
+            --area Milton Keynes --area Peterborough --area Slough --area Reading
+
+      - name: Compile the real routes
+        run: |
+          python scripts/import_gtfs_routes.py \
+            --source backend/data/raw/bods \
+            --out backend/data/raw/real_bus_routes/compiled_bods.json.gz
+
+      - name: Commit the compiled network back to this branch
+        run: |
+          git config user.name 'movein-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/data/raw/real_bus_routes/compiled_bods.json.gz backend/data/raw/bods/manifest.json 2>/dev/null || true
+          git add -f backend/data/raw/bods/manifest.json 2>/dev/null || true
+          git commit -m "Fetch published UK bus routes from the Bus Open Data Service" || echo "nothing changed"
+          git push

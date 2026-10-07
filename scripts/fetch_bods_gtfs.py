@@ -56,9 +56,17 @@ DEFAULT_OUT = ROOT / "backend/data/raw/bods"
 
 
 def api_key(explicit: str | None = None) -> str:
-    """The key, from the argument, the environment, or a local .env file."""
+    """The key, from the argument, the environment, or a local .env file.
+
+    Returns "" when none is configured and anonymous use was allowed, because
+    the BODS catalogue is readable without one -- only some feeds are not.
+    """
     if explicit:
         return explicit.strip()
+    if os.environ.get("MOVEIN_BODS_ALLOW_ANONYMOUS") == "1":
+        for name in ("MOVEIN_BODS_API_KEY", "BODS_API_KEY"):
+            if os.environ.get(name):
+                return os.environ[name].strip()
     for name in ("MOVEIN_BODS_API_KEY", "BODS_API_KEY"):
         value = os.environ.get(name)
         if value:
@@ -72,9 +80,12 @@ def api_key(explicit: str | None = None) -> str:
             key, _, value = line.partition("=")
             if key.strip() in {"MOVEIN_BODS_API_KEY", "BODS_API_KEY"}:
                 return value.strip().strip("'\"")
+    if os.environ.get("MOVEIN_BODS_ALLOW_ANONYMOUS") == "1":
+        return ""
     raise SystemExit(
         "No API key.  Set MOVEIN_BODS_API_KEY in the environment or a .env file,\n"
-        "or pass --api-key.  Keys are free from https://data.bus-data.dft.gov.uk/"
+        "or pass --api-key.  Keys are free from https://data.bus-data.dft.gov.uk/\n"
+        "(or set MOVEIN_BODS_ALLOW_ANONYMOUS=1 to try without one)"
     )
 
 
@@ -106,10 +117,10 @@ def fetch_datasets(key: str, *, limit: int | None = None, page: int = 100) -> li
     try:
         client = httpx.Client(timeout=60.0, follow_redirects=True)
         while True:
-            response = client.get(
-                f"{BODS_BASE_URL}/api/v1/dataset/",
-                params={"api_key": key, "limit": page, "offset": offset},
-            )
+            params = {"limit": page, "offset": offset}
+            if key:
+                params["api_key"] = key
+            response = client.get(f"{BODS_BASE_URL}/api/v1/dataset/", params=params)
             response.raise_for_status()
             body = response.json()
             results = body.get("results", [])
@@ -180,8 +191,9 @@ def download(dataset: dict, key: str, out_dir: Path, *, timeout: float = 600.0) 
     archive = target / "download.zip"
     print(f"  [{identifier}] {dataset.get('operatorName', '?')} -> {url}")
     try:
+        params = {"api_key": key} if key else {}
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-            with client.stream("GET", url, params={"api_key": key}) as response:
+            with client.stream("GET", url, params=params) as response:
                 response.raise_for_status()
                 with archive.open("wb") as handle:
                     for chunk in response.iter_bytes(1 << 20):
