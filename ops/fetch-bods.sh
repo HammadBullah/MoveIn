@@ -71,6 +71,7 @@ left() { echo $(( BUDGET_MIN - $(elapsed) )); }
 
 echo "=== $(date -u +%FT%TZ) fetching published UK bus data ==="
 echo "budget: ${BUDGET_MIN} minutes; compiling: ${REGIONS[*]}"
+echo "disk free: $(df -h / | tail -1 | awk '{print $4}')"
 echo
 
 echo "--- can this machine reach BODS, and does anything need a key? ---"
@@ -108,7 +109,6 @@ for region in "${REGIONS[@]}"; do
   fi
 
   zip="$RAW/$region.zip"
-  dir="$RAW/$region"
   out="$OUT_DIR/compiled_bods_$region.json.gz"
 
   if [ -f "$out" ] && [ -z "$FORCE" ]; then
@@ -128,17 +128,13 @@ for region in "${REGIONS[@]}"; do
   fi
   echo "   on disk: $(du -h "$zip" | cut -f1)"
 
-  echo "== $region: unpacking"
-  rm -rf "$dir"
-  if ! unzip -o -q "$zip" -d "$dir"; then
-    echo "   unzip failed -- moving on"
-    continue
-  fi
-  echo "   unpacked: $(du -sh "$dir" | cut -f1); files: $(find "$dir" -name '*.txt' | wc -l)"
-
-  echo "== $region: compiling real routes into MoveIn's schema"
+  echo "   disk free: $(df -h / | tail -1 | awk '{print $4}')"
+  echo "== $region: compiling real routes into MoveIn's schema, straight from the zip"
+  # The compiler reads the GTFS tables out of the zip itself.  Unpacking first
+  # needs 11 GB for the national file, which once killed a run at the commit
+  # step on a full disk; this needs the 1.7 GB download and nothing more.
   if python scripts/import_gtfs_routes.py \
-      --source "$dir" \
+      --source "$zip" \
       --out "$out" \
       --prefix "$region" \
       --region "$region"; then
@@ -149,7 +145,8 @@ for region in "${REGIONS[@]}"; do
   fi
 
   # The published feed is big and reproducible; only the compiled result is kept.
-  rm -rf "$dir" "$zip"
+  rm -f "$zip"
+  rm -rf "$dir"
   echo "   elapsed: $(elapsed) min, budget left: $(left) min"
 done
 

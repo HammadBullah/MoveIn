@@ -38,13 +38,57 @@ def test_the_layer_says_it_has_no_times(client):
     assert "1,700" in body["coverage_note"] or "1700" in body["coverage_note"]
 
 
+
+
+def _km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in kilometres."""
+    from math import asin, cos, radians, sin, sqrt
+
+    dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
+    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(a))
+
+
+def _assert_options_connect(body: dict, *, near: float = 3.0) -> None:
+    """Every option must board at the origin and alight at the destination.
+
+    This is the assertion that catches a stop *name* being used as a stop
+    *identity*: with names as keys, a route hundreds of miles away that happens
+    to call at a stop of the same name looks like it serves this corridor, and
+    the board and alight points give it away.
+    """
+    for option in body["options"]:
+        board_km = _km(
+            body["origin"]["lat"],
+            body["origin"]["lon"],
+            option["board"]["lat"],
+            option["board"]["lon"],
+        )
+        alight_km = _km(
+            body["destination"]["lat"],
+            body["destination"]["lon"],
+            option["alight"]["lat"],
+            option["alight"]["lon"],
+        )
+        assert board_km <= near, (
+            f"{option['number']} boards {board_km:.0f} km from {body['origin']['label']}"
+        )
+        assert alight_km <= near, (
+            f"{option['number']} alights {alight_km:.0f} km from {body['destination']['label']}"
+        )
+
 def test_a_route_number_finds_the_real_route(client):
-    found = client.get("/api/bus/routes?q=148").json()
+    found = client.get("/api/bus/routes?q=148&limit=500").json()
     assert found["count"] >= 1
-    route = next(item for item in found["routes"] if item["number"] == "148")
-    assert "Stagecoach" in route["operator"]
-    assert route["stop_count"] > 50, "the 148 is a long inter-urban route"
-    assert route["from"] and route["to"]
+    long_ones = [
+        item
+        for item in found["routes"]
+        if item["number"] == "148"
+        and "Stagecoach" in item["operator"]
+        and item["stop_count"] > 50
+    ]
+    assert long_ones, "the 148 between Coventry and Leicester is a long Stagecoach route"
+    assert all(item["from"] and item["to"] for item in long_ones)
 
 
 def test_a_routes_stops_are_named_real_stops_in_order(client):
@@ -65,11 +109,12 @@ def test_an_unknown_route_is_a_404(client):
 
 
 def test_a_corridor_returns_the_service_that_runs_it(client):
-    body = client.get("/api/bus/between?origin=Coventry&destination=Leicester").json()
+    body = client.get("/api/bus/between?origin=Coventry&destination=Leicester&limit=100").json()
     assert body["count"] >= 1
-    option = body["options"][0]
-    assert option["number"] == "148"
-    assert "Coventry" in option["board"]["name"] or "TRINITY" in option["board"]["name"]
+    _assert_options_connect(body)
+    numbers = {option["number"] for option in body["options"]}
+    assert "148" in numbers, numbers
+    option = next(item for item in body["options"] if item["number"] == "148")
     assert option["stops_travelled"] > 10
     assert option["direction"] in {"forward", "reverse"}
     assert option["calls_at"], "a service between two places calls at places"
@@ -77,11 +122,10 @@ def test_a_corridor_returns_the_service_that_runs_it(client):
 
 def test_a_corridor_works_the_other_way_round(client):
     """The operator publishes the 148 into Leicester; the return must still answer."""
-    back = client.get("/api/bus/between?origin=Leicester&destination=Coventry").json()
+    back = client.get("/api/bus/between?origin=Leicester&destination=Coventry&limit=100").json()
     assert back["count"] >= 1
-    option = back["options"][0]
-    assert option["number"] == "148"
-    assert "Leicester" in option["board"]["name"] or "Margaret" in option["board"]["name"]
+    _assert_options_connect(back)
+    assert any(option["number"] == "148" for option in back["options"])
 
 
 def test_the_oxford_banbury_corridor_is_found(client):
@@ -90,18 +134,21 @@ def test_the_oxford_banbury_corridor_is_found(client):
     With the town naming fixed, the real S4 between Oxford and Banbury is
     findable, which is the difference between a coverage claim and a wrong one.
     """
-    body = client.get("/api/bus/between?origin=Oxford&destination=Banbury").json()
+    body = client.get("/api/bus/between?origin=Oxford&destination=Banbury&limit=100").json()
     assert body["count"] >= 1, body
     assert body["origin"]["label"] == "Oxford"
     assert body["destination"]["label"] == "Banbury"
     assert body["destination"]["lat"] > 51.9, "Banbury is in Oxfordshire, not Coventry"
+    _assert_options_connect(body)
     assert any(option["number"] == "S4" for option in body["options"])
 
 
 def test_a_corridor_with_no_service_says_so_instead_of_guessing(client):
-    body = client.get("/api/bus/between?origin=Whitby&destination=Penzance").json()
-    assert body["count"] == 0
-    assert body["options"] == []
+    body = client.get("/api/bus/between?origin=Whitby&destination=Penzance&limit=100").json()
+    # A local bus does not run Whitby to Penzance; if anything is returned it
+    # must still be a service that really boards at one and alights at the other.
+    _assert_options_connect(body)
+    assert body["count"] == 0, body["options"][:1]
 
 
 def test_an_unresolvable_place_is_an_error_not_a_guess(client):
@@ -143,7 +190,7 @@ def test_bus_routes_filter_by_operator(client):
     operators = client.get("/api/bus/operators").json()
     assert operators["count"] >= 5
     name = operators["operators"][0]["name"]
-    listed = client.get(f"/api/bus/routes?operator={name}&limit=200").json()
+    listed = client.get(f"/api/bus/routes?operator={name}&limit=100").json()
     assert listed["count"] >= 1
     assert {route["operator"] for route in listed["routes"]} == {name}
 

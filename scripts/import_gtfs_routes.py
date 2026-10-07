@@ -31,9 +31,11 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import io
 import json
 import os
 import sys
+import zipfile
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -92,45 +94,85 @@ MIN_STOPS = 2
 DEFAULT_TOLERANCE_M = 12.0
 
 
-def _open_text(path: Path):
+#: A GTFS table is either a file on disk or a member inside a published zip.
+Member = Path | tuple[Path, str]
+
+
+class _ZipMember:
+    """A table inside a zip, opened as text -- without unpacking the zip.
+
+    The national file is 1.7 GB zipped and 11 GB unpacked, which is more disk
+    than a runner comfortably has; reading the members where they lie removes
+    that ceiling entirely.
+    """
+
+    def __init__(self, archive: Path, name: str) -> None:
+        self.archive = archive
+        self.name = name
+        self._zip: zipfile.ZipFile | None = None
+
+    def __enter__(self):
+        self._zip = zipfile.ZipFile(self.archive)
+        raw = self._zip.open(self.name)
+        return io.TextIOWrapper(raw, encoding="utf-8-sig", errors="replace", newline="")
+
+    def __exit__(self, *exc) -> None:
+        if self._zip is not None:
+            self._zip.close()
+
+
+def _open_text(member: Member):
     """GTFS files in the wild are UTF-8, UTF-8 with a BOM, or Windows-1252."""
+    if isinstance(member, tuple):
+        return _ZipMember(*member)
     for encoding in ("utf-8-sig", "utf-8", "cp1252"):
         try:
-            handle = path.open(newline="", encoding=encoding)
+            handle = member.open(newline="", encoding=encoding)
             handle.readline()
             handle.seek(0)
             return handle
         except UnicodeDecodeError:
             continue
-    return path.open(newline="", encoding="utf-8", errors="replace")
+    return member.open(newline="", encoding="utf-8", errors="replace")
 
 
-def describe(path: Path) -> str:
+def describe(path) -> str:
     """A path for a person to read: relative when it is inside the repo."""
+    if isinstance(path, tuple):
+        return f"{describe(path[0])}::{path[1]}"
     try:
         return str(path.relative_to(ROOT))
     except ValueError:
         return str(path)
 
 
-def gtfs_files(source: Path) -> dict[str, list[Path]]:
-    """Every GTFS table under a source directory, keyed by table name."""
-    wanted = {
-        "stops.txt",
-        "routes.txt",
-        "trips.txt",
-        "stop_times.txt",
-        "shapes.txt",
-        "agency.txt",
-    }
-    found: dict[str, list[Path]] = defaultdict(list)
+WANTED_TABLES = {
+    "stops.txt",
+    "routes.txt",
+    "trips.txt",
+    "stop_times.txt",
+    "shapes.txt",
+    "agency.txt",
+}
+
+
+def gtfs_files(source: Path) -> dict[str, list[Member]]:
+    """Every GTFS table in a directory or a published zip, keyed by table name."""
+    found: dict[str, list[Member]] = defaultdict(list)
+    if source.is_file() and source.suffix.lower() == ".zip":
+        with zipfile.ZipFile(source) as archive:
+            for name in sorted(archive.namelist()):
+                leaf = name.rsplit("/", 1)[-1]
+                if leaf in WANTED_TABLES and not name.endswith("/"):
+                    found[leaf].append((source, name))
+        return found
     for path in sorted(source.rglob("*.txt")):
-        if path.name in wanted:
+        if path.name in WANTED_TABLES:
             found[path.name].append(path)
     return found
 
 
-def read_table(paths: list[Path], needed: tuple[str, ...]):
+def read_table(paths: list[Member], needed: tuple[str, ...]):
     """Stream rows from one or more files of the same table, keeping `needed`."""
     for path in paths:
         with _open_text(path) as handle:
@@ -139,8 +181,14 @@ def read_table(paths: list[Path], needed: tuple[str, ...]):
                 yield {key: (row.get(key) or "").strip() for key in needed}
 
 
-def load_stops(paths: list[Path]) -> dict[str, dict]:
-    """stop_id -> {name, lat, lon} for every stop the feed names."""
+def load_stops(paths: list[Member]) -> dict[str, dict]:
+    """stop_id -> {atco, name, lat, lon} for every stop the feed names.
+
+    The feed's own `stop_id` is kept as the stop's identity.  It matters: a stop
+    *name* is shared across the country -- there is a Bus Station in most towns
+    -- so keying stops by name would make "routes passing this point" answer
+    with every route that calls at any stop of that name anywhere in Britain.
+    """
     stops: dict[str, dict] = {}
     for row in read_table(
         paths, ("stop_id", "stop_name", "stop_lat", "stop_lon", "location_type")
@@ -155,7 +203,12 @@ def load_stops(paths: list[Path]) -> dict[str, dict]:
             continue
         if not (49.0 < lat < 61.5 and -8.5 < lon < 2.5):
             continue
-        stops[row["stop_id"]] = {"name": row["stop_name"], "lat": lat, "lon": lon}
+        stops[row["stop_id"]] = {
+            "atco": row["stop_id"],
+            "name": row["stop_name"],
+            "lat": lat,
+            "lon": lon,
+        }
     return stops
 
 
@@ -293,7 +346,7 @@ def compile_gtfs(
                 "source": f"GTFS route {route_id} direction {direction}",
                 "stops": [
                     {
-                        "atco": stop["name"],  # GTFS stop_id is the feed's own key
+                        "atco": stop["atco"],
                         "name": stop["name"],
                         "lat": round(stop["lat"], 5),
                         "lon": round(stop["lon"], 5),
@@ -362,7 +415,7 @@ def _sample(trip_ids: list[str], limit: int = 60) -> list[str]:
     return [trip_ids[int(index * step)] for index in range(limit)]
 
 
-def load_agencies(paths: list[Path]) -> dict[str, str]:
+def load_agencies(paths: list[Member]) -> dict[str, str]:
     names: dict[str, str] = {}
     for row in read_table(paths, ("agency_id", "agency_name")):
         if row["agency_name"]:
