@@ -142,6 +142,28 @@ def test_regions_are_the_modelled_cities(client):
 # --- journeys -------------------------------------------------------------
 
 
+def _minutes(clock: str) -> int:
+    """A clock time as minutes since midnight.
+
+    Journeys carry full timestamps (`2026-10-07T21:32+01:00`) and legs carry
+    clock times (`21:32`), so both are reduced to the time part.
+    """
+    time_part = clock.split("T")[-1].split("+")[0].rstrip("Z")
+    hours, minutes = (int(part) for part in time_part.split(":")[:2])
+    return hours * 60 + minutes
+
+
+def _runs_forwards(departure: str, arrival: str) -> bool:
+    """True when `arrival` is after `departure`, allowing for midnight.
+
+    A journey that leaves at 21:32 and arrives at 00:34 is a real and ordinary
+    evening journey; comparing the two as strings calls it backwards, which is
+    what this helper exists to stop.
+    """
+    elapsed = (_minutes(arrival) - _minutes(departure)) % (24 * 60)
+    return 0 < elapsed < 12 * 60
+
+
 def test_journey_search_returns_ranked_options(client):
     body = _search(client)
     assert body["journeys"]
@@ -152,7 +174,7 @@ def test_journey_search_returns_ranked_options(client):
     scores = [journey["score"] for journey in body["journeys"]]
     assert scores == sorted(scores, reverse=True), "results come back best first"
     for journey in body["journeys"]:
-        assert journey["departure"] < journey["arrival"]
+        assert _runs_forwards(journey["departure"], journey["arrival"])
         assert journey["price"] >= 0
         assert journey["legs"]
         assert journey["duration_label"]
@@ -175,7 +197,7 @@ def test_journey_legs_are_fully_described(client):
                 assert leg["operator"]["name"]
                 assert leg["route_name"]
                 assert leg["headsign"]
-                assert leg["departure"] < leg["arrival"]
+                assert _runs_forwards(leg["departure"], leg["arrival"])
                 assert leg["distance_km"] > 0
                 assert leg["stops_count"] >= 2
                 assert leg["trip_id"]
