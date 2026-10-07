@@ -74,25 +74,55 @@ matched against the committed NaPTAN register by coordinate (40 m radius, 45 m
 dedupe, grid-indexed), and shapes are simplified with Ramer–Douglas–Peucker at
 12 m — invisible at any zoom a phone uses.
 
-**What it is not.** It carries **no departure times**, and every API payload in
-`/api/bus/*` says `"has_times": false` and why. It is also a **slice, not the
-country**: 5 operators of roughly 1,700, and only the routes whose stops come
-near MoveIn's NaPTAN extract.
+**Times.** Where the published feed gives them, each stop carries the
+departure time of the one representative trip MoveIn keeps, and a route says
+`"has_times": true`; `/api/bus/coverage` counts how many do. Those are the
+operator's own published times for a schedule, not live running, and the route
+screen says so. A shape with no times still says `"has_times": false` rather
+than inventing a clock.
 
-**How to grow it.** The Bus Open Data Service's dataset API reports **936
-published datasets** (each a zip of TransXChange XML and GTFS). Run:
+**It is a slice, not the country.** Five operators of roughly 1,700 in the
+mirrored set — and only the routes whose stops come near MoveIn's NaPTAN
+extract.
 
-```bash
-export MOVEIN_BODS_API_KEY=...                      # free from data.bus-data.dft.gov.uk
-.venv/bin/python scripts/fetch_bods_gtfs.py --list  # 936 datasets, filterable
-.venv/bin/python scripts/fetch_bods_gtfs.py --area Nottingham --noc NCTR
-.venv/bin/python scripts/import_gtfs_routes.py      # -> compiled_bods.json.gz
+**How it grows — the regional published feeds.** BODS publishes its converted
+GTFS for the whole country and for each English region, **with no key needed**:
+
+```
+https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file/{all,england,east_midlands,…}/
 ```
 
-The loader merges every `compiled*.json.gz` in
-`backend/data/raw/real_bus_routes/`, so an import *adds* to the network. The
-compiler is tested on a five-stop fixture (`backend/tests/fixtures/gtfs_mini`)
-so the national path is proven logic, not a hopeful one.
+`ops/fetch-bods.sh` downloads those files, compiles each region on its own into
+`compiled_bods_<region>.json.gz` (ids scoped by region, so feeds merge without
+colliding) and drops the raw feed afterwards. The loader merges every
+`compiled*.json.gz` in `backend/data/raw/real_bus_routes/`, so an import *adds*
+to the network, and a run that finishes three regions still commits three.
+
+**Why a GitHub runner does the downloading.** MoveIn's own sandbox has no route
+to BODS at all — the TLS handshake is dropped before a request is sent, and no
+API key changes that. A GitHub Actions runner has ordinary internet access, so
+the workflow in `.github/workflows/bods-import.yml` runs the fetch and commits
+the result back; that is the only way data crosses into this repository.
+
+**The API's own datasets, and the key.** The richer per-operator datasets behind
+`/api/v1/dataset/` need a key for the *catalogue* (the files themselves are
+public: a runner downloaded one, keylessly, 8.7 MB).  The Department for
+Transport publishes its own client for exactly that job —
+[`department-for-transport-BODS/bods-data-extractor`](https://github.com/department-for-transport-BODS/bods-data-extractor)
+(`BODSDataExtractor`) — and MoveIn now uses it:
+`scripts/extract_bods_cities.py` points it at the ATCO areas of the cities the
+app models (330/339 Nottingham, 269/260 Leicester, 430 West Midlands, 450 West
+Yorkshire, 180 Greater Manchester, 490 London, and so on, taken from the
+committed NaPTAN extract). It runs on the runner **when the repository has a
+`BODS_API_KEY` secret**; without one the workflow says so and falls back to the
+keyless regional feeds. This environment cannot write repository secrets, so
+adding that secret is a one-click human step in GitHub: Settings → Secrets and
+variables → Actions → New repository secret.
+
+**Other published APIs, noted but not yet used:** `/api/v1/fares/dataset/`
+(808 published fares datasets, e.g. 16 covering Nottingham) and
+`/api/v1/datafeed/` (live vehicle-position feeds). Both are real and public;
+neither is in the app yet, and nothing here claims otherwise.
 
 **Licence.** Open Government Licence v3.0 (Bus Open Data Service, Department for
 Transport), with NaPTAN for stop names and coordinates.
