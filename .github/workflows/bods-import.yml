@@ -47,7 +47,7 @@ jobs:
         continue-on-error: true
         run: |
           echo "report file: '$MOVEIN_BODS_REPORT' (cwd $(pwd))" | tee -a "$MOVEIN_BODS_REPORT"
-          bash ops/fetch-bods.sh 60 2>&1 | tee -a "$MOVEIN_BODS_REPORT"
+          bash ops/fetch-bods.sh 60 $(cat ops/fetch-bods.args 2>/dev/null || true) 2>&1 | tee -a "$MOVEIN_BODS_REPORT"
           echo "exit of the pipeline: ${PIPESTATUS[0]}"
           echo "report is now $(wc -c < "$MOVEIN_BODS_REPORT") bytes"
 

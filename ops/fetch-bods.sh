@@ -33,7 +33,16 @@
 
 set -uo pipefail
 
-BUDGET_MIN="${1:-100}"
+BUDGET_MIN=100
+FORCE=""
+ONLY=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force) FORCE=1; shift ;;
+    --only) ONLY="${2:-}"; shift 2 ;;
+    *) BUDGET_MIN="$1"; shift ;;
+  esac
+done
 STARTED=$(date +%s)
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -42,28 +51,26 @@ RAW="backend/data/raw/bulk_gtfs"
 OUT_DIR="backend/data/raw/real_bus_routes"
 BASE="https://data.bus-data.dft.gov.uk/timetable/download/gtfs-file"
 
-# Regions worth having, most relevant to what MoveIn covers first.
-REGIONS=(
-  east_midlands
-  west_midlands
-  north_west
-  north_east
-  london
-  south_east
-  yorkshire
-  east_anglia
-  south_west
-  england
-  scotland
-  wales
-  all
-)
+# `all` is Great Britain: every stop, route and trip the operators publish,
+# converted once by BODS.  The regional files are its subsets, so the default is
+# the single national file -- smaller to hold, no route held twice.  Name
+# regions explicitly when a targeted run is wanted:
+#
+#   bash ops/fetch-bods.sh 60 --only east_midlands,north_west --force
+#
+# (before the parser below, this line used to be the list all regions were
+# fetched from, which is why the first national run brought back thirteen
+# files, twelve of them duplicates.)
+REGIONS=(all)
+if [ -n "$ONLY" ]; then
+  IFS=', ' read -r -a REGIONS <<< "$ONLY"
+fi
 
 elapsed() { echo $(( ($(date +%s) - STARTED) / 60 )); }
 left() { echo $(( BUDGET_MIN - $(elapsed) )); }
 
 echo "=== $(date -u +%FT%TZ) fetching published UK bus data ==="
-echo "budget: ${BUDGET_MIN} minutes; region files are compiled one at a time"
+echo "budget: ${BUDGET_MIN} minutes; compiling: ${REGIONS[*]}"
 echo
 
 echo "--- can this machine reach BODS, and does anything need a key? ---"
@@ -104,10 +111,12 @@ for region in "${REGIONS[@]}"; do
   dir="$RAW/$region"
   out="$OUT_DIR/compiled_bods_$region.json.gz"
 
-  if [ -f "$out" ]; then
+  if [ -f "$out" ] && [ -z "$FORCE" ]; then
     echo "== $region: already compiled ($(du -h "$out" | cut -f1)) -- skipping"
     continue
   fi
+  [ -n "$FORCE" ] && echo "== $region: recompiling (--force) over $(du -h "$out" 2>/dev/null | cut -f1 || echo 'nothing')"
+
 
   echo
   echo "== $region: downloading"
