@@ -60,6 +60,13 @@ class Settings(BaseSettings):
     max_access_walk_m: int = 2000
     #: Maximum walking distance when changing between stops.
     max_transfer_walk_m: int = 900
+    #: Walking longer than this is a real burden rather than a stroll, so a
+    #: journey that needs it is shown as an explicit option instead of being
+    #: silently included in the best results.  15 minutes is roughly 1.2 km.
+    comfortable_walk_s: int = 900
+    #: Walking further than this in one go is not a journey anybody plans: the
+    #: search will not return it unless the traveller raises the limit.
+    max_walk_s: int = 1800
     #: Maximum number of public-transport legs in a returned journey.
     max_legs: int = 5
     #: Minimum connection time at a stop served by more than one operator.

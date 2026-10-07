@@ -121,6 +121,10 @@ class Journey:
     notes: list[str] = field(default_factory=list)
     #: Number of vehicles boarded.
     transit_legs: int = 0
+    #: The longest single walk in the journey, in seconds.
+    longest_walk_s: int = 0
+    #: "comfortable" | "long" -- whether any single walk exceeds the threshold.
+    walk_comfort: str = "comfortable"
 
     @property
     def duration_s(self) -> int:
@@ -238,6 +242,8 @@ class JourneyAssembler:
         traveller: TravellerProfile,
         settings_discounts: tuple[float, float] = (0.34, 0.25),
         max_egress_walk_m: int = 2000,
+        max_walk_s: int | None = None,
+        comfortable_walk_s: int = 900,
     ) -> Journey | None:
         """Build one journey from a search label plus access and egress legs."""
         dest_stop = self.graph.stops.get(destination_stop_id)
@@ -271,6 +277,18 @@ class JourneyAssembler:
 
         # A walk into a walk is one walk; see _merge_walks.
         legs = _merge_walks(legs)
+
+        # Walking is the one part of a journey a traveller cannot opt out of
+        # midway, so it is bounded before anything else: nobody plans a journey
+        # around a 25 minute walk, and offering one as if it were normal
+        # buries the options they would actually take.
+        walk_legs = [leg for leg in legs if isinstance(leg, WalkLeg)]
+        longest_walk_s = max((leg.duration_s for leg in walk_legs), default=0)
+        if max_walk_s is not None and longest_walk_s > max_walk_s:
+            return None
+        walk_comfort = (
+            "long" if longest_walk_s > comfortable_walk_s else "comfortable"
+        )
 
         # --- timing ------------------------------------------------------
         access_s = access.duration_s if access is not None and access.distance_m > 40 else 0
@@ -379,6 +397,8 @@ class JourneyAssembler:
             modes=modes,
             notes=list(fare.notes),
             transit_legs=len(transit_legs),
+            longest_walk_s=longest_walk_s,
+            walk_comfort=walk_comfort,
         )
         return journey
 
@@ -463,7 +483,12 @@ class JourneyRanker:
                 j for j in journeys
                 if not (exclude_walk_only and j.is_walk_only)
             ] or journeys
-            return min(pool, key=key_fn)
+            # A journey with a long walk can still win a headline -- sometimes
+            # it is the only option -- but it does not win one while a
+            # comfortable journey could have.  "Cheapest" should not quietly
+            # mean "and a 24 minute walk"
+            comfortable = [j for j in pool if j.walk_comfort == "comfortable"]
+            return min(comfortable or pool, key=key_fn)
 
         # Order matters for the display: the headline cards first.
         rules = [

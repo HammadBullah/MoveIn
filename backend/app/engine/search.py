@@ -251,6 +251,14 @@ class SearchOptions:
     departure_sweep: int = 3
     #: Sweep interval, in seconds.
     departure_interval_s: int = 1800
+    #: No single walk in a returned journey may take longer than this.  MoveIn
+    #: treats a long walk as a decision the traveller makes, not one made for
+    #: them, so this is a hard ceiling that the request can tighten.
+    max_walk_s: int | None = None
+    #: Walking beyond this stops being a stroll and starts being the reason a
+    #: journey was rejected.  Journeys that cross it are returned, labelled, and
+    #: kept out of the headline trade-offs unless nothing else competes.
+    comfortable_walk_s: int = 900
 
 
 @dataclass

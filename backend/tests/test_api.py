@@ -640,3 +640,69 @@ def test_the_departure_on_the_card_is_the_departure_of_the_first_leg(client):
         )
         assert journey["duration_s"] >= 0
         assert journey["arrival"] >= journey["departure"]
+
+
+# --- walking ---------------------------------------------------------------
+
+
+def test_a_journey_says_how_long_its_longest_walk_is(client):
+    """The number that matters is the worst single walk, not the total."""
+    body = client.post(
+        "/api/journeys/search",
+        json={"origin": "Nottingham", "destination": "Birmingham", "limit": 8},
+    ).json()
+    assert body["journeys"]
+    for journey in body["journeys"]:
+        assert journey["longest_walk_s"] >= 0
+        assert journey["longest_walk_s"] <= journey["walking_s"] + 1
+        assert journey["walk_comfort"] in ("comfortable", "long")
+        assert journey["walk_warning"] is (journey["walk_comfort"] != "comfortable")
+        if journey["longest_walk_s"] > 15 * 60:
+            assert journey["walk_comfort"] == "long", (
+                "a walk over the comfort threshold must be flagged"
+            )
+
+
+def test_a_walk_limit_is_respected_and_reported(client):
+    """Ask for a 20 minute maximum and no option may need more."""
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 10,
+            "max_walk_minutes": 20,
+        },
+    ).json()
+    assert body["journeys"]
+    for journey in body["journeys"]:
+        assert journey["longest_walk_s"] <= 20 * 60
+
+
+def test_an_impossible_walk_limit_says_why_instead_of_showing_nothing(client):
+    """An empty screen is not an answer: show what relaxing the limit buys."""
+    body = client.post(
+        "/api/journeys/search",
+        json={
+            "origin": "Nottingham",
+            "destination": "Birmingham",
+            "limit": 10,
+            "max_walk_minutes": 4,
+        },
+    ).json()
+
+    assert body["journeys"], "the traveller is shown the options anyway, labelled"
+    assert body["diagnostics"]["walk_limit_relaxed"] == 4
+    assert body["notice"]["kind"] == "walk_limit_relaxed"
+    assert "4 minute walk" in body["notice"]["message"]
+    assert body["notice"]["shortest_walk_minutes"] >= 4
+
+
+def test_the_walk_limit_is_optional(client):
+    """No limit means the network default applies, and nothing is announced."""
+    body = client.post(
+        "/api/journeys/search",
+        json={"origin": "Nottingham", "destination": "Birmingham", "limit": 5},
+    ).json()
+    assert body["notice"] is None
+    assert "walk_limit_relaxed" not in body["diagnostics"]

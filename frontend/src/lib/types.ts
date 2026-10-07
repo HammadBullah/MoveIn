@@ -138,6 +138,11 @@ export interface Journey {
   walking_m: number
   walking_s: number
   walking_label: string
+  /** The worst single walk in the journey: the number that decides if it is doable. */
+  longest_walk_s: number
+  longest_walk_label: string
+  walk_comfort: 'comfortable' | 'long'
+  walk_warning: boolean
   co2_g: number
   co2_label: string
   reliability: number
@@ -184,6 +189,13 @@ export interface SearchResponse {
     lowest_emissions?: { id: string; co2_g: number; co2_label: string }
   }
   nearby_destinations: StopSuggestion[]
+  /** Set when the app had to stretch a limit to show anything at all. */
+  notice: {
+    kind: string
+    message: string
+    requested_walk_minutes?: number
+    shortest_walk_minutes?: number
+  } | null
   diagnostics: Record<string, number | string>
 }
 

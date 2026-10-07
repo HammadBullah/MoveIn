@@ -2,66 +2,91 @@ import { useState } from 'react'
 import { co2, metres, modeColour, modeIcon, minutes } from '../lib/format'
 import type { Journey } from '../lib/types'
 import { MapView } from './MapView'
-import { ModeChain, Pill } from './Primitives'
+import { Pill } from './Primitives'
 
-export function JourneyCard({
+/**
+ * One journey, as one row.
+ *
+ * The row is the unit of decision, so it carries only what a person compares:
+ * when they arrive, how long it takes, what it costs, and how far they have to
+ * walk. Everything else is behind the tap.
+ */
+export function RideRow({
   journey,
+  selected,
   onSelect,
-  highlighted,
 }: {
   journey: Journey
+  selected: boolean
   onSelect: () => void
-  highlighted?: boolean
 }) {
+  const tags = journey.archetype_labels.slice(0, 2)
   return (
     <button
       type="button"
-      className={`journey${highlighted ? ' journey--best' : ''}`}
+      className={`ride${selected ? ' ride--selected' : ''}${
+        journey.walk_warning ? ' ride--walking' : ''
+      }`}
       onClick={onSelect}
-      aria-label={`Journey departing ${journey.departure_time}, arriving ${journey.arrival_time}, ${journey.price_label}`}
+      aria-expanded={selected}
+      aria-label={`${journey.departure_time} to ${journey.arrival_time}, ${journey.duration_label}, ${journey.price_label}`}
     >
-      <div>
-        <div className="journey__times">
-          {journey.departure_time}
-          <div className="journey__arrow">↓</div>
-          {journey.arrival_time}
-          {journey.arrival_day_offset > 0 && (
-            <span className="tiny muted"> +{journey.arrival_day_offset}d</span>
+      <span className="ride__rail" aria-hidden>
+        {journey.modes.slice(0, 3).map((mode, index) => (
+          <span
+            key={`${mode}-${index}`}
+            className="ride__mode"
+            style={{
+              background: `${modeColour(mode)}1f`,
+              borderColor: `${modeColour(mode)}66`,
+              color: modeColour(mode),
+            }}
+          >
+            {modeIcon(mode)}
+          </span>
+        ))}
+        {journey.is_walk_only && <span className="ride__mode">🚶</span>}
+      </span>
+
+      <span className="ride__body">
+        <span className="ride__times">
+          <strong>{journey.arrival_time}</strong>
+          <span className="ride__duration">{journey.duration_label}</span>
+        </span>
+        <span className="ride__meta">
+          {journey.departure_time} · {journey.route_label} ·{' '}
+          {journey.changes === 0 ? 'direct' : journey.changes_label}
+        </span>
+        <span className="ride__tags">
+          {journey.walk_warning && (
+            <Pill tone="amber">🚶 {journey.longest_walk_label}</Pill>
           )}
-        </div>
-        <div className="journey__duration">{journey.duration_label}</div>
-      </div>
-
-      <div>
-        <div className="journey__legs">
-          <ModeChain modes={journey.modes} />
-          <span className="pill">{journey.changes_label}</span>
-          {journey.walking_m > 50 && <Pill tone="navy">🚶 {journey.walking_label}</Pill>}
-          {journey.step_free && <Pill tone="teal">♿</Pill>}
-          {journey.archetype_labels.slice(0, 2).map((label) => (
-            <Pill key={label} tone="teal">
+          {!journey.walk_warning && journey.walking_m > 50 && (
+            <span className="tag tag--quiet">🚶 {journey.longest_walk_label}</span>
+          )}
+          {journey.step_free && <span className="tag tag--quiet">♿ step-free</span>}
+          <span className="tag tag--quiet">{journey.reliability_label}</span>
+          {tags.map((label) => (
+            <span className="tag tag--win" key={label}>
               {label}
-            </Pill>
+            </span>
           ))}
-        </div>
-        <div className="journey__meta">
-          {journey.route_label} · {journey.operators.map((o) => o.name).join(', ')} ·{' '}
-          {journey.reliability_label} · {co2(journey.co2_g)} CO₂e
-        </div>
-      </div>
+        </span>
+      </span>
 
-      <div className="journey__price">
-        <div className="journey__price-value">{journey.price_label}</div>
-        <div className="journey__meta">
-          {journey.fare.tickets.length} ticket{journey.fare.tickets.length === 1 ? '' : 's'}
-        </div>
-      </div>
+      <span className="ride__price">
+        <strong>{journey.price_label}</strong>
+        <span className="tiny muted">
+          {journey.fare.tickets.length} ticket
+          {journey.fare.tickets.length === 1 ? '' : 's'}
+        </span>
+      </span>
     </button>
   )
 }
 
-/** The cheapest / fastest / greenest summaries above the result list. */
-export function ArchetypeRow({
+/** The quick picks: the trade-offs, as a strip of one-tap shortcuts. */
+export function QuickPicks({
   journeys,
   labels,
   onSelect,
@@ -80,20 +105,21 @@ export function ArchetypeRow({
   if (!entries.length) return null
 
   return (
-    <div className="archetype-row">
+    <div className="quick-picks">
       {entries.map(({ key, journey }) => (
         <button
           key={key}
           type="button"
-          className={`archetype${selectedId === journey.id ? ' archetype--selected' : ''}`}
+          className={`quick-pick${selectedId === journey.id ? ' quick-pick--on' : ''}`}
           onClick={() => onSelect(journey)}
         >
-          <div className="archetype__label">
-            <span aria-hidden>{archetypeGlyph(key)}</span>
-            {humanise(key)}
-          </div>
-          <div className="archetype__headline">{headlineFor(key, journey)}</div>
-          <div className="archetype__sub">{subtitleFor(key, journey)}</div>
+          <span className="quick-pick__icon" aria-hidden>
+            {archetypeGlyph(key)}
+          </span>
+          <span>
+            <span className="quick-pick__label">{humanise(key)}</span>
+            <span className="quick-pick__value">{headlineFor(key, journey)}</span>
+          </span>
         </button>
       ))}
     </div>
@@ -139,64 +165,51 @@ function headlineFor(key: string, journey: Journey): string {
     case 'fewest_changes':
       return journey.changes_label
     case 'least_walking':
-      return journey.walking_label
+      return journey.longest_walk_label
     default:
       return `${journey.price_label} · ${journey.duration_label}`
   }
 }
 
-function subtitleFor(key: string, journey: Journey): string {
-  switch (key) {
-    case 'cheapest':
-      return `arrives ${journey.arrival_time} · ${journey.duration_label}`
-    case 'fastest':
-      return `arrives ${journey.arrival_time} · ${journey.price_label}`
-    case 'lowest_emissions':
-      return `${journey.mode_label} · ${journey.duration_label}`
-    case 'fewest_changes':
-      return `${journey.duration_label} · ${journey.price_label}`
-    case 'least_walking':
-      return `${journey.duration_label} · ${journey.price_label}`
-    case 'accessible':
-      return `${journey.duration_label} · ${journey.price_label}`
-    default:
-      return `arrives ${journey.arrival_time} · ${journey.price_label}`
-  }
-}
-
-/** The step-by-step itinerary, with the fare breakdown underneath. */
+/**
+ * The chosen journey, opened out: the step-by-step itinerary, where you walk,
+ * and what you are buying.
+ */
 export function JourneyDetail({
   journey,
   onTrack,
   tracked,
   onSave,
   saved,
+  originLabel,
+  destinationLabel,
 }: {
   journey: Journey
   onTrack?: () => void
   tracked?: string | null
   onSave?: () => void
   saved?: boolean
+  originLabel?: string
+  destinationLabel?: string
 }) {
   const [showAllStops, setShowAllStops] = useState(false)
 
   return (
-    <div className="card card--pad">
-      <div className="row row--between" style={{ alignItems: 'flex-start' }}>
+    <div className="detail">
+      <div className="detail__head">
         <div>
-          <h2 style={{ marginBottom: '0.15rem' }}>
+          <div className="detail__times">
             {journey.departure_time} → {journey.arrival_time}
             {journey.arrival_day_offset > 0 && (
-              <span className="muted small"> (+{journey.arrival_day_offset} day)</span>
+              <span className="muted small"> +{journey.arrival_day_offset}d</span>
             )}
-          </h2>
+          </div>
           <div className="muted small">
-            {journey.duration_label} · {journey.route_label} · {journey.changes_label} ·{' '}
-            {journey.walking_label}
+            {journey.duration_label} · {journey.route_label} · {journey.changes_label}
           </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '1.6rem', fontWeight: 750 }}>{journey.price_label}</div>
+        <div className="detail__price">
+          <strong>{journey.price_label}</strong>
           {onSave && (
             <button className="btn btn--ghost btn--sm" onClick={onSave} disabled={saved}>
               {saved ? '★ Saved' : '☆ Save'}
@@ -205,22 +218,23 @@ export function JourneyDetail({
         </div>
       </div>
 
-      {journey.archetype_labels.length > 0 && (
-        <div className="row" style={{ marginTop: '0.6rem' }}>
-          {journey.archetype_labels.map((label) => (
-            <Pill key={label} tone="teal">
-              {label}
-            </Pill>
-          ))}
+      {journey.walk_warning ? (
+        <div className="banner banner--warn">
+          <strong>This one needs a {journey.longest_walk_label}.</strong> The other
+          options on this page keep you closer to a stop — this is here because you
+          asked to see it, not because MoveIn recommends it.
+        </div>
+      ) : (
+        <div className="banner banner--info">
+          Walking: {metres(journey.walking_m)} in total, {journey.longest_walk_label} in
+          one go.
         </div>
       )}
 
-      <div style={{ margin: '1rem 0' }}>
-        <MapView journey={journey} />
-      </div>
+      <MapView journey={journey} />
 
       {tracked && (
-        <div className="banner banner--info" style={{ marginBottom: '0.9rem' }}>
+        <div className="banner banner--info">
           <strong>Live: {tracked}</strong>
         </div>
       )}
@@ -231,11 +245,7 @@ export function JourneyDetail({
             <span
               className={`leg__dot${leg.kind === 'transit' ? ' leg__dot--transit' : ''}`}
               aria-hidden
-              style={
-                leg.kind === 'transit'
-                  ? { borderColor: modeColour(leg.mode) }
-                  : undefined
-              }
+              style={leg.kind === 'transit' ? { borderColor: modeColour(leg.mode) } : undefined}
             >
               {modeIcon(leg.mode)}
             </span>
@@ -256,8 +266,7 @@ export function JourneyDetail({
               {leg.kind === 'transit' ? (
                 <>
                   {leg.from.name} → {leg.to.name} · {minutes(leg.duration_s ?? 0)} ·{' '}
-                  {leg.distance_km} km · {leg.stops_count} stops · {leg.fare} ·{' '}
-                  {leg.operator?.name}
+                  {leg.stops_count} stops · {leg.fare} · {leg.operator?.name}
                 </>
               ) : (
                 <>
@@ -271,22 +280,44 @@ export function JourneyDetail({
               <>
                 <button
                   className="btn btn--ghost btn--sm"
-                  style={{ marginTop: '0.25rem' }}
                   onClick={() => setShowAllStops((v) => !v)}
                 >
-                  {showAllStops ? '▾' : '▸'} {leg.intermediate_stops?.length} stops
+                  {showAllStops ? '▾' : '▸'} {leg.stops_count} stops
                 </button>
                 {showAllStops && (
                   <ul className="stop-list">
+                    <li>
+                      <strong>{leg.from.name}</strong>
+                    </li>
                     {leg.intermediate_stops?.map((stop) => (
                       <li key={stop.id}>{stop.name}</li>
                     ))}
+                    <li>
+                      <strong>{leg.to.name}</strong>
+                    </li>
                   </ul>
                 )}
               </>
             )}
           </div>
         ))}
+
+        <div className="leg leg--end">
+          <span className="leg__dot leg__dot--end" aria-hidden>
+            ◎
+          </span>
+          <div className="leg__head">
+            <span className="leg__time">{journey.arrival_time}</span>
+            <span className="leg__instruction">
+              Arrive {destinationLabel ?? journey.legs.at(-1)?.to.name}
+            </span>
+          </div>
+          {originLabel && (
+            <div className="leg__detail">
+              Left {originLabel} at {journey.departure_time}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="section-title">Your tickets</div>
@@ -301,7 +332,13 @@ export function JourneyDetail({
         <tbody>
           {journey.fare.tickets.map((ticket, index) => (
             <tr key={index}>
-              <td>{ticket.label}</td>
+              <td>
+                {ticket.label}
+                <div className="tiny muted">
+                  covers leg{ticket.covers_legs.length === 1 ? '' : 's'}{' '}
+                  {ticket.covers_legs.map((i) => i + 1).join(', ')}
+                </div>
+              </td>
               <td>{ticket.operator_name}</td>
               <td style={{ textAlign: 'right' }} className="mono">
                 {ticket.price_label}
@@ -320,18 +357,18 @@ export function JourneyDetail({
       </table>
 
       {journey.fare.saving_vs_singles > 0.01 && (
-        <div className="banner banner--info" style={{ marginTop: '0.6rem' }}>
+        <div className="banner banner--info">
           Buying this combination saves £{journey.fare.saving_vs_singles.toFixed(2)} against
           separate singles.
         </div>
       )}
       {journey.fare.notes.map((note, index) => (
-        <div className="banner" style={{ marginTop: '0.6rem' }} key={index}>
+        <div className="banner" key={index}>
           {note}
         </div>
       ))}
 
-      <div className="stat-grid" style={{ marginTop: '1rem' }}>
+      <div className="stat-grid">
         <div className="stat">
           <div className="stat__value">{co2(journey.co2_g)}</div>
           <div className="stat__label">CO₂e</div>
@@ -341,8 +378,8 @@ export function JourneyDetail({
           <div className="stat__label">Punctuality</div>
         </div>
         <div className="stat">
-          <div className="stat__value">{metres(journey.walking_m)}</div>
-          <div className="stat__label">Walking</div>
+          <div className="stat__value">{journey.longest_walk_label}</div>
+          <div className="stat__label">Longest walk</div>
         </div>
         <div className="stat">
           <div className="stat__value">{journey.step_free ? 'Yes' : 'Limited'}</div>

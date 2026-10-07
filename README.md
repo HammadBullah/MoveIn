@@ -24,6 +24,7 @@ features and national-scale deployment are deliberately out of scope (see
 | Engine | Multi-criteria RAPTOR with Pareto labelling, walking access and interchange, on-demand first/last mile, and a service-day filter |
 | Fares | Ticket-combination optimiser: singles, off-peak, advance, operator day tickets, contactless caps, railcard/student/child/season discounts |
 | Ranking | Seven traveller preferences, four normalised criteria, archetype labelling (Cheapest, Fastest, Fewest changes, Least walking, Lowest emissions, Best value, Step-free) |
+| Walking | A 15-minute promise by default, a stated limit the traveller can tighten (10 / 15 / 20 minutes), and longer walks returned as a labelled choice rather than as the answer |
 | API | 25 endpoints over FastAPI, OpenAPI documented at `/api/docs` |
 | App | React + TypeScript: Plan, Live, Saved and Data screens, drawn from real coordinates, no map tile dependency |
 | Quality | 130 tests covering ingestion, the compiler, the graph, the engine, fares, ranking and every endpoint |
@@ -69,6 +70,7 @@ Useful commands:
 .venv/bin/python -m pytest backend/tests -q     # the whole suite
 .venv/bin/python scripts/seed_db.py --status    # what is in the database
 cd frontend && npm run build                    # production bundle into frontend/dist
+cd frontend && npm run test:render             # renders the real app in a DOM (API must be up)
 ```
 
 The API serves the built SPA from `frontend/dist` when it exists, so a single
@@ -164,6 +166,15 @@ out of 100 where higher is better. Each journey is labelled with the trade-off
 it wins, so the results screen is a set of genuine choices rather than one
 "best" answer.
 
+**Walking is a decision, not a footnote.** In practice nobody accepts a long
+walk to save 20 minutes, so MoveIn promises a 15-minute maximum by default, lets
+the traveller tighten it to 10 minutes (or open it up entirely), and measures
+the *longest single walk* rather than the total — because a 30-minute stroll in
+four pieces is fine and one 25-minute march to a coach stop is not. Options
+beyond the promise are still returned, flagged, in their own collapsed section;
+they never take a headline label such as "Cheapest" while a comfortable journey
+could have it.
+
 ### Why the compiled timetable is still worth planning on
 
 Every journey the engine produces is a real route between real places: the
@@ -186,7 +197,7 @@ the feed plumbing is already built and tested.
 | GET | `/api/stops/nearby` | Stops near a coordinate |
 | GET | `/api/stops/regions` | The modelled cities and towns |
 | GET | `/api/stops/{stop_id}` | One stop with its routes and operators |
-| POST | `/api/journeys/search` | **Plan a journey** |
+| POST | `/api/journeys/search` | **Plan a journey** (`max_walk_minutes`, `limit`, preference, traveller) |
 | POST | `/api/journeys/compare-emissions` | Compare modes on one trip |
 | GET | `/api/network/summary` · `/operators` · `/routes` | What the network contains |
 | GET | `/api/fares/products` · `/operators` | The fare table |
@@ -208,8 +219,15 @@ for a real authenticated user without changing any call site.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest backend/tests -q
+.venv/bin/python -m pytest backend/tests -q     # the engine, the pipeline, every endpoint
+cd frontend && npm run test:render             # the planning screen, rendered and asserted on
 ```
+
+The render test mounts the real app in a DOM against the real API and asserts
+what a traveller would see: that the walk limit is offered, that the default
+keeps long walks out, that asking for "Any walk" re-plans and files them in
+their own labelled section, and that choosing a row moves the detail panel to
+it. A type-check does not tell you whether a page renders or what it says.
 
 The suite runs against the real compiled feed rather than a synthetic fixture,
 because the bugs worth catching are in the data: a corridor that does not

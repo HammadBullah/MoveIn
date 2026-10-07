@@ -8,6 +8,8 @@ draw a journey without a second round trip is assembled here.
 
 from __future__ import annotations
 
+import math
+
 from datetime import datetime, timedelta
 
 from ..domain.models import Mode, Stop
@@ -287,6 +289,23 @@ def fare_payload(fare: FareBreakdown | None) -> dict:
     }
 
 
+def walk_minutes(seconds: int) -> int:
+    """Walk time in whole minutes, rounded up: part of a minute is a minute."""
+    return max(1, math.ceil(seconds / 60)) if seconds else 0
+
+
+def _walk_label(seconds: int) -> str:
+    """A walk length the way a person would say it: "9 min walk".
+
+    Rounded up, never to nearest: 616 seconds is "11 min walk", not "10 min
+    walk", because a traveller who has said they will walk ten minutes has said
+    something the journey has to be honest about.
+    """
+    if not seconds:
+        return "no walking"
+    return f"{walk_minutes(seconds)} min walk"
+
+
 def journey_payload(
     journey: Journey,
     graph: TransitGraph,
@@ -348,6 +367,12 @@ def journey_payload(
         ),
         "walking_m": round(journey.walking_m),
         "walking_s": journey.walking_s,
+        # Walking is shown as a decision, not a footnote: the longest single
+        # walk is what makes a journey unreasonable, and the app groups by it.
+        "longest_walk_s": journey.longest_walk_s,
+        "longest_walk_label": _walk_label(journey.longest_walk_s),
+        "walk_comfort": journey.walk_comfort,
+        "walk_warning": journey.walk_comfort != "comfortable",
         "walking_label": (
             "No walking"
             if journey.walking_m < 50

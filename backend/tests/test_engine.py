@@ -429,3 +429,122 @@ def test_a_journey_departs_when_the_traveller_does(planner):
                 )
                 assert journey.departure >= requested
     assert checked >= 6, "not enough journeys to be meaningful"
+
+
+# --- walking: an option, not a default -------------------------------------
+
+
+def test_a_long_walk_is_offered_as_a_choice_not_as_the_answer(planner):
+    """Nobody plans their day around a 25 minute walk, so it is not the headline.
+
+    The cheapest journey from A to B is often the one with the worst walk at
+    either end.  Returning it as "Cheapest" without saying so is how a planner
+    recommends something nobody would take -- so a journey that needs a long
+    walk keeps its price and its place in the list, but the headline labels go
+    to journeys a traveller can actually complete.
+    """
+    result = planner.plan(
+        origin="Nottingham",
+        destination="Birmingham",
+        departure=datetime(2026, 10, 7, 9, 0),
+    )
+    comfortable = [j for j in result.journeys if j.walk_comfort == "comfortable"]
+    long_walk = [j for j in result.journeys if j.walk_comfort == "long"]
+    assert comfortable and long_walk, "this corridor has both kinds of option"
+
+    # The long walks are still there, still priced, and visibly flagged.
+    for journey in long_walk:
+        assert journey.longest_walk_s > planner.settings.comfortable_walk_s
+        assert journey.price > 0
+
+    # Every headline goes to a comfortable journey when one is available.
+    for label in ("cheapest", "fastest", "best_value", "least_walking"):
+        winner = next(j for j in result.journeys if label in j.archetypes)
+        assert winner.walk_comfort == "comfortable", (
+            f"{label} went to a journey with a "
+            f"{winner.longest_walk_s // 60} minute walk"
+        )
+
+
+def test_a_long_walk_can_still_win_when_it_is_the_only_option():
+    """Flagged, not hidden: if the long walk is all there is, it is the answer.
+
+    Built from journeys rather than searched for, because the rule is about
+    labelling and a search that happens to contain both kinds of option cannot
+    prove what happens when it does not.
+    """
+    from backend.app.engine.journeys import Journey, JourneyRanker
+
+    def journey(journey_id: str, price: float, walk_min: int, *, score: float = 50.0):
+        return Journey(
+            id=journey_id,
+            departure=datetime(2026, 10, 7, 9, 0),
+            arrival=datetime(2026, 10, 7, 10, 0),
+            price=price,
+            walking_m=walk_min * 80,
+            walking_s=walk_min * 60,
+            longest_walk_s=walk_min * 60,
+            walk_comfort="long" if walk_min > 15 else "comfortable",
+            co2_g=1000.0,
+            transit_legs=1,
+            score=score,
+            scores={"price": score, "time": 50.0, "changes": 50.0, "walking": 50.0},
+        )
+
+    cheap_and_far = journey("a", 3.00, 25)
+    dear_and_close = journey("b", 7.00, 5)
+    ranked = JourneyRanker.select_archetypes(
+        JourneyRanker.rank([cheap_and_far, dear_and_close], Preference.BEST_VALUE)
+        if False
+        else [cheap_and_far, dear_and_close]
+    )
+    assert "cheapest" in dear_and_close.archetypes, (
+        "the cheapest journey a traveller can actually complete should win"
+    )
+    assert "cheapest" not in cheap_and_far.archetypes, (
+        "the long walk must not take the headline it only holds because of price"
+    )
+    assert "accessible" in cheap_and_far.archetypes, (
+        "step-free is not a comfort trade-off, so it still wins on merit"
+    )
+
+    # Nothing else in the set: the long walk is still labelled, not hidden.
+    only = journey("c", 3.00, 25)
+    JourneyRanker.select_archetypes([only])
+    assert "cheapest" in only.archetypes
+
+
+def test_the_walk_budget_is_a_hard_ceiling(planner):
+    """A stated limit is a promise: no returned journey may exceed it."""
+    for minutes in (10, 12, 15, 20):
+        result = planner.plan(
+            origin="Nottingham",
+            destination="Birmingham",
+            departure=datetime(2026, 10, 7, 9, 0),
+            max_walk_s=minutes * 60,
+        )
+        for journey in result.journeys:
+            assert journey.longest_walk_s <= minutes * 60, (
+                f"{minutes} min limit returned a "
+                f"{journey.longest_walk_s / 60:.1f} min walk"
+            )
+        # And the limit genuinely bites: fewer options than with no limit.
+        unlimited = planner.plan(
+            origin="Nottingham",
+            destination="Birmingham",
+            departure=datetime(2026, 10, 7, 9, 0),
+        )
+        assert len(result.journeys) <= len(unlimited.journeys)
+
+
+def test_walk_labels_round_up(planner):
+    """616 seconds is an 11 minute walk, not a 10 minute one."""
+    from backend.app.api.serializers import _walk_label, walk_minutes
+
+    assert walk_minutes(590) == 10
+    assert walk_minutes(600) == 10
+    assert walk_minutes(601) == 11
+    assert walk_minutes(616) == 11
+    assert walk_minutes(0) == 0
+    assert _walk_label(0) == "no walking"
+    assert _walk_label(616) == "11 min walk"

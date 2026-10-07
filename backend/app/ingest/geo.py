@@ -45,6 +45,17 @@ def walk_duration_s(distance_m: float, speed_mps: float = 1.35) -> int:
     return int(round(15.0 + distance_m / speed_mps))
 
 
+def walk_time_to_distance_m(duration_s: int, speed_mps: float = 1.35) -> float:
+    """The walking distance somebody covers in a given time.
+
+    The inverse of :func:`walk_duration_s`, including the same fixed setup time,
+    so a "15 minute walk" limit and a "1200 metre" limit mean the same thing.
+    """
+    if duration_s <= 0:
+        return 0.0
+    return max(0.0, (duration_s - 15.0) * speed_mps)
+
+
 def cycle_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Estimated cycling distance (lower circuity than walking)."""
     return haversine_m(lat1, lon1, lat2, lon2) * 1.15 + 20.0

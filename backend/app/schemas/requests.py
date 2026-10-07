@@ -48,6 +48,10 @@ class JourneySearchRequest(BaseModel):
     preference: Preference = Preference.BEST_VALUE
     traveller: TravellerIn = Field(default_factory=TravellerIn)
     options: SearchOptionsIn = Field(default_factory=SearchOptionsIn)
+    #: Longest walk, in minutes, the traveller will accept in one go.  Tightening
+    #: this is the difference between "plan me a journey" and "plan me a journey
+    #: I will actually take": nobody walks 25 minutes between two vehicles.
+    max_walk_minutes: int | None = Field(default=None, ge=2, le=60)
     #: Optional opaque client id, used to scope saved journeys and alerts.
     device_key: str | None = Field(default=None, max_length=64)
     #: How many journeys to return, after ranking.

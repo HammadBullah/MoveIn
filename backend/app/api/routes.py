@@ -36,7 +36,7 @@ from ..schemas.requests import (
 )
 from ..services import realtime
 from .deps import DbDep, DeviceDep, OptionalDeviceDep, PlannerDep, resolve_device
-from .serializers import clock, journey_payload, money, stop_payload
+from .serializers import clock, journey_payload, money, stop_payload, walk_minutes
 
 meta = APIRouter(tags=["meta"])
 stops = APIRouter(prefix="/stops", tags=["stops"])
@@ -269,19 +269,48 @@ def search_journeys(
         )
 
     options = request.options
-    result = planner.plan(
-        origin=origin,
-        destination=destination,
-        departure=departure,
-        preference=request.preference,
-        traveller=_traveller(request.traveller),
-        max_legs=options.max_legs,
-        step_free_only=options.step_free_only or request.traveller.step_free,
-        include_walking_only=options.include_walking_only,
-        departure_sweep=options.departure_sweep,
-        allow_on_demand=options.allow_on_demand,
-        limit=request.limit,
-    )
+
+    def plan(max_walk_s: int | None):
+        return planner.plan(
+            origin=origin,
+            destination=destination,
+            departure=departure,
+            preference=request.preference,
+            traveller=_traveller(request.traveller),
+            max_legs=options.max_legs,
+            step_free_only=options.step_free_only or request.traveller.step_free,
+            include_walking_only=options.include_walking_only,
+            departure_sweep=options.departure_sweep,
+            allow_on_demand=options.allow_on_demand,
+            limit=request.limit,
+            max_walk_s=max_walk_s,
+        )
+
+    walk_limit_s = request.max_walk_minutes * 60 if request.max_walk_minutes else None
+    result = plan(walk_limit_s)
+    walk_notice = None
+    if walk_limit_s is not None and not result.journeys:
+        # "Nothing within a 10 minute walk" is an answer, but a useless one on
+        # its own.  If the traveller's limit is what emptied the screen, show
+        # them what it would cost to relax it, labelled as exactly that.
+        relaxed = plan(None)
+        if relaxed.journeys:
+            result = relaxed
+            result.diagnostics["walk_limit_relaxed"] = request.max_walk_minutes
+            shortest = min(
+                j.longest_walk_s for j in result.journeys
+            )
+            walk_notice = {
+                "kind": "walk_limit_relaxed",
+                "requested_walk_minutes": request.max_walk_minutes,
+                "shortest_walk_minutes": walk_minutes(shortest),
+                "message": (
+                    f"Nothing connects {origin.label} and {destination.label} "
+                    f"within a {request.max_walk_minutes} minute walk. These are "
+                    f"the options if you can walk up to "
+                    f"{walk_minutes(shortest)} minutes."
+                ),
+            }
 
     payloads = [
         journey_payload(
@@ -327,6 +356,7 @@ def search_journeys(
         "archetypes": archetypes,
         "typical": _typical_summary(payloads),
         "nearby_destinations": result.alternatives,
+        "notice": walk_notice,
         "diagnostics": result.diagnostics,
     }
 

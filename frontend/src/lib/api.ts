@@ -111,6 +111,8 @@ export const api = {
     preference: string
     traveller?: Record<string, unknown>
     options?: Record<string, unknown>
+    /** Longest walk, in minutes, the traveller will accept in one go. */
+    max_walk_minutes?: number | null
     limit?: number
   }) =>
     request<SearchResponse>('/journeys/search', {

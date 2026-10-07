@@ -23,7 +23,7 @@ from ..config import Settings, get_settings
 from ..domain.models import Mode, Stop, TransportNetwork, uk_now
 from ..domain.network_spec import ALL_CORRIDORS, FareRule
 from ..domain.regions import REGIONS, REGIONS_BY_SLUG
-from ..ingest.geo import haversine_m, walk_distance_m, walk_duration_s
+from ..ingest.geo import haversine_m, walk_distance_m, walk_duration_s, walk_time_to_distance_m
 from ..ingest.gtfs import read_gtfs
 from ..ingest.network_compiler import _normalise_stop_name
 from .fares import FareEngine, TravellerProfile
@@ -259,6 +259,7 @@ class JourneyPlanner:
         allow_on_demand: bool = True,
         max_access_walk_m: int | None = None,
         limit: int | None = None,
+        max_walk_s: int | None = None,
     ) -> PlanResult:
         settings = self.settings
         if isinstance(preference, str):
@@ -290,20 +291,29 @@ class JourneyPlanner:
 
         # A traveller who says they cannot manage steps also cannot manage a
         # long walk, so their stated limit wins over the network default.
+        walk_budget_s = max_walk_s if max_walk_s is not None else settings.max_walk_s
+        walk_budget_m = walk_time_to_distance_m(walk_budget_s)
         access_walk_m = max_access_walk_m or (
             min(traveller.max_walk_m, settings.max_access_walk_m)
             if traveller.max_walk_m
             else settings.max_access_walk_m
         )
+        # The time budget and the distance budgets are the same promise made in
+        # two units, so the tighter of the two always wins.
+        access_walk_m = int(min(access_walk_m, walk_budget_m))
         options = SearchOptions(
             max_legs=max_legs or settings.max_legs,
             max_access_walk_m=access_walk_m,
-            max_transfer_walk_m=settings.max_transfer_walk_m,
+            max_transfer_walk_m=int(
+                min(settings.max_transfer_walk_m, walk_budget_m)
+            ),
             min_connection_s=settings.min_connection_s,
             max_journey_duration_s=settings.max_journey_duration_s,
             allow_on_demand=allow_on_demand,
             require_step_free=step_free_only,
             departure_sweep=departure_sweep or settings.departure_sweep,
+            max_walk_s=walk_budget_s,
+            comfortable_walk_s=settings.comfortable_walk_s,
         )
 
         origin_point = (origin_place.lat, origin_place.lon)
@@ -383,6 +393,8 @@ class JourneyPlanner:
                             settings.student_discount,
                         ),
                         max_egress_walk_m=options.max_access_walk_m,
+                        max_walk_s=options.max_walk_s,
+                        comfortable_walk_s=options.comfortable_walk_s,
                     )
                     if journey is None:
                         continue
