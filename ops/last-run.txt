@@ -40,3 +40,618 @@ no compiled file
 === done 2026-10-07T15:19:43Z ===
 === commit 2026-10-07T15:19:44Z ===
 report: -rw-r--r-- 1 runner runner 1581 Oct  7 15:19 ops/last-run.txt
+report file: 'ops/last-run.txt' (cwd /home/runner/work/MoveIn/MoveIn)
+=== 2026-10-07T15:22:09Z fetching published UK bus data ===
+budget: 60 minutes; region files are compiled one at a time
+
+--- can this machine reach BODS, and does anything need a key? ---
+3.168.51.71     data.bus-data.dft.gov.uk
+3.168.51.36     data.bus-data.dft.gov.uk
+catalogue without a key: HTTP 401
+{"detail":"Authentication credentials were not provided."}
+
+--- what regional files exist, and how big are they? ---
+  east_midlands  HTTP 200  ? bytes (0.0 MB)
+  west_midlands  HTTP 200  ? bytes (0.0 MB)
+  north_west     HTTP 200  ? bytes (0.0 MB)
+  north_east     HTTP 200  ? bytes (0.0 MB)
+  london         HTTP 200  ? bytes (0.0 MB)
+  south_east     HTTP 200  ? bytes (0.0 MB)
+  yorkshire      HTTP 200  ? bytes (0.0 MB)
+  east_anglia    HTTP 200  ? bytes (0.0 MB)
+  south_west     HTTP 200  ? bytes (0.0 MB)
+  england        HTTP 200  ? bytes (0.0 MB)
+  scotland       HTTP 200  ? bytes (0.0 MB)
+  wales          HTTP 200  ? bytes (0.0 MB)
+  all            HTTP 200  ? bytes (0.0 MB)
+
+--- download, compile, one region at a time ---
+
+== east_midlands: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 29242    0 29242    0     0  62939      0 --:--:-- --:--:-- --:--:-- 62886100 24.7M    0 24.7M    0     0  17.4M      0 --:--:--  0:00:01 --:--:-- 17.4M100 53.5M    0 53.5M    0     0  22.4M      0 --:--:--  0:00:02 --:--:-- 22.4M100 92.8M    0 92.8M    0     0  27.4M      0 --:--:--  0:00:03 --:--:-- 27.4M100  136M    0  136M    0     0  31.1M      0 --:--:--  0:00:04 --:--:-- 31.1M100  176M    0  176M    0     0  32.8M      0 --:--:--  0:00:05 --:--:-- 35.8M100  183M    0  183M    0     0  33.1M      0 --:--:--  0:00:05 --:--:-- 38.5M
+   192335463 bytes in 5.539550s
+   on disk: 184M
+== east_midlands: unpacking
+   unpacked: 1.2G; files: 9
+== east_midlands: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:22:26+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/east_midlands
+Reading stops...
+  31,662 named stops
+Reading routes...
+  1,205 bus routes
+Reading trips...
+  98,887 trips; reading stop_times for 49,942
+Reading stop_times...
+Reading shapes...
+
+routes:     2,142
+operators:  65
+stops:      13,736
+wrote backend/data/raw/real_bus_routes/compiled_bods_east_midlands.json.gz (1.7 MB gzipped)
+
+--- compile report opened 2026-10-07T15:22:26+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/east_midlands
+Reading stops...
+  31,662 named stops
+Reading routes...
+  1,205 bus routes
+Reading trips...
+  98,887 trips; reading stop_times for 49,942
+Reading stop_times...
+Reading shapes...
+
+routes:     2,142
+operators:  65
+stops:      13,736
+wrote backend/data/raw/real_bus_routes/compiled_bods_east_midlands.json.gz (1.7 MB gzipped)
+   compiled: 1.7M
+   elapsed: 1 min, budget left: 59 min
+
+== west_midlands: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  4970    0  4970    0     0  11051      0 --:--:-- --:--:-- --:--:-- 11044100 10.6M    0 10.6M    0     0  8563k      0 --:--:--  0:00:01 --:--:-- 8558k100 62.8M    0 62.8M    0     0  27.5M      0 --:--:--  0:00:02 --:--:-- 27.5M100  114M    0  114M    0     0  35.0M      0 --:--:--  0:00:03 --:--:-- 35.0M100  132M    0  132M    0     0  36.6M      0 --:--:--  0:00:03 --:--:-- 36.6M
+   138762366 bytes in 3.610890s
+   on disk: 133M
+== west_midlands: unpacking
+   unpacked: 829M; files: 9
+== west_midlands: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:23:22+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/west_midlands
+Reading stops...
+  30,468 named stops
+Reading routes...
+  1,153 bus routes
+Reading trips...
+  112,494 trips; reading stop_times for 50,396
+Reading stop_times...
+Reading shapes...
+
+routes:     2,086
+operators:  57
+stops:      13,587
+wrote backend/data/raw/real_bus_routes/compiled_bods_west_midlands.json.gz (1.4 MB gzipped)
+
+--- compile report opened 2026-10-07T15:23:22+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/west_midlands
+Reading stops...
+  30,468 named stops
+Reading routes...
+  1,153 bus routes
+Reading trips...
+  112,494 trips; reading stop_times for 50,396
+Reading stop_times...
+Reading shapes...
+
+routes:     2,086
+operators:  57
+stops:      13,587
+wrote backend/data/raw/real_bus_routes/compiled_bods_west_midlands.json.gz (1.4 MB gzipped)
+   compiled: 1.5M
+   elapsed: 1 min, budget left: 59 min
+
+== north_west: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 22296    0 22296    0     0  35749      0 --:--:-- --:--:-- --:--:-- 35730100 22.2M    0 22.2M    0     0  13.6M      0 --:--:--  0:00:01 --:--:-- 13.6M100 68.5M    0 68.5M    0     0  26.1M      0 --:--:--  0:00:02 --:--:-- 26.1M100  102M    0  102M    0     0  28.2M      0 --:--:--  0:00:03 --:--:-- 28.2M100  134M    0  134M    0     0  30.5M      0 --:--:--  0:00:04 --:--:-- 30.5M
+   140773166 bytes in 4.395981s
+   on disk: 135M
+== north_west: unpacking
+   unpacked: 839M; files: 9
+== north_west: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:24:00+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/north_west
+Reading stops...
+  36,770 named stops
+Reading routes...
+  1,672 bus routes
+Reading trips...
+  108,345 trips; reading stop_times for 61,007
+Reading stop_times...
+Reading shapes...
+
+routes:     2,843
+operators:  63
+stops:      16,611
+wrote backend/data/raw/real_bus_routes/compiled_bods_north_west.json.gz (2.1 MB gzipped)
+
+--- compile report opened 2026-10-07T15:24:00+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/north_west
+Reading stops...
+  36,770 named stops
+Reading routes...
+  1,672 bus routes
+Reading trips...
+  108,345 trips; reading stop_times for 61,007
+Reading stop_times...
+Reading shapes...
+
+routes:     2,843
+operators:  63
+stops:      16,611
+wrote backend/data/raw/real_bus_routes/compiled_bods_north_west.json.gz (2.1 MB gzipped)
+   compiled: 2.1M
+   elapsed: 2 min, budget left: 58 min
+
+== north_east: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 1528k    0 1528k    0     0  1567k      0 --:--:-- --:--:-- --:--:-- 1566k100 48.3M    0 48.3M    0     0  24.2M      0 --:--:--  0:00:01 --:--:-- 24.2M100 56.0M    0 56.0M    0     0  26.1M      0 --:--:--  0:00:02 --:--:-- 26.2M
+   58737252 bytes in 2.138682s
+   on disk: 57M
+== north_east: unpacking
+   unpacked: 369M; files: 9
+== north_east: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:24:36+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/north_east
+Reading stops...
+  16,095 named stops
+Reading routes...
+  715 bus routes
+Reading trips...
+  47,258 trips; reading stop_times for 30,946
+Reading stop_times...
+Reading shapes...
+
+routes:     1,196
+operators:  25
+stops:      8,682
+wrote backend/data/raw/real_bus_routes/compiled_bods_north_east.json.gz (0.9 MB gzipped)
+
+--- compile report opened 2026-10-07T15:24:36+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/north_east
+Reading stops...
+  16,095 named stops
+Reading routes...
+  715 bus routes
+Reading trips...
+  47,258 trips; reading stop_times for 30,946
+Reading stop_times...
+Reading shapes...
+
+routes:     1,196
+operators:  25
+stops:      8,682
+wrote backend/data/raw/real_bus_routes/compiled_bods_north_east.json.gz (0.9 MB gzipped)
+   compiled: 912K
+   elapsed: 2 min, budget left: 58 min
+
+== london: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 93883    0 93883    0     0   198k      0 --:--:-- --:--:-- --:--:--  198k100 11.3M    0 11.3M    0     0  8055k      0 --:--:--  0:00:01 --:--:-- 8053k100 17.6M    0 17.6M    0     0  7338k      0 --:--:--  0:00:02 --:--:-- 7336k100 20.6M    0 20.6M    0     0  6124k      0 --:--:--  0:00:03 --:--:-- 6124k100 21.6M    0 21.6M    0     0  4983k      0 --:--:--  0:00:04 --:--:-- 4983k100 23.5M    0 23.5M    0     0  4429k      0 --:--:--  0:00:05 --:--:-- 4820k100 24.5M    0 24.5M    0     0  3907k      0 --:--:--  0:00:06 --:--:-- 2706k100 47.8M    0 47.8M    0     0  6575k      0 --:--:--  0:00:07 --:--:-- 6198k100 77.0M    0 77.0M    0     0  9342k      0 --:--:--  0:00:08 --:--:-- 11.2M100 98.6M    0 98.6M    0     0  10.4M      0 --:--:--  0:00:09 --:--:-- 15.4M100  132M    0  132M    0     0  12.6M      0 --:--:--  0:00:10 --:--:-- 21.7M100  163M    0  163M    0     0  14.3M      0 --:--:--  0:00:11 --:--:-- 27.8M100  191M    0  191M    0     0  15.3M      0 --:--:--  0:00:12 --:--:-- 28.7M100  216M    0  216M    0     0  16.0M      0 --:--:--  0:00:13 --:--:-- 27.8M100  245M    0  245M    0     0  16.9M      0 --:--:--  0:00:14 --:--:-- 29.2M100  272M    0  272M    0     0  17.6M      0 --:--:--  0:00:15 --:--:-- 28.0M100  297M    0  297M    0     0  18.0M      0 --:--:--  0:00:16 --:--:-- 26.7M100  298M    0  298M    0     0  18.0M      0 --:--:--  0:00:16 --:--:-- 26.3M
+   313517464 bytes in 16.525674s
+   on disk: 299M
+== london: unpacking
+   unpacked: 1.5G; files: 10
+== london: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:25:12+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/london
+Reading stops...
+  24,719 named stops
+Reading routes...
+  1,094 bus routes
+Reading trips...
+  425,555 trips; reading stop_times for 95,664
+Reading stop_times...
+Reading shapes...
+
+routes:     1,949
+operators:  48
+stops:      13,051
+wrote backend/data/raw/real_bus_routes/compiled_bods_london.json.gz (1.2 MB gzipped)
+
+--- compile report opened 2026-10-07T15:25:12+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/london
+Reading stops...
+  24,719 named stops
+Reading routes...
+  1,094 bus routes
+Reading trips...
+  425,555 trips; reading stop_times for 95,664
+Reading stop_times...
+Reading shapes...
+
+routes:     1,949
+operators:  48
+stops:      13,051
+wrote backend/data/raw/real_bus_routes/compiled_bods_london.json.gz (1.2 MB gzipped)
+   compiled: 1.3M
+   elapsed: 3 min, budget left: 57 min
+
+== south_east: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 13902    0 13902    0     0  30295      0 --:--:-- --:--:-- --:--:-- 30287100 20.2M    0 20.2M    0     0  13.8M      0 --:--:--  0:00:01 --:--:-- 13.8M100 43.1M    0 43.1M    0     0  17.5M      0 --:--:--  0:00:02 --:--:-- 17.5M100 83.0M    0 83.0M    0     0  24.0M      0 --:--:--  0:00:03 --:--:-- 24.0M100  134M    0  134M    0     0  30.1M      0 --:--:--  0:00:04 --:--:-- 30.1M100  190M    0  190M    0     0  34.8M      0 --:--:--  0:00:05 --:--:-- 37.9M100  238M    0  238M    0     0  37.2M      0 --:--:--  0:00:06 --:--:-- 44.1M
+   250581757 bytes in 6.418176s
+   on disk: 239M
+== south_east: unpacking
+   unpacked: 1.5G; files: 10
+== south_east: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:26:02+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/south_east
+Reading stops...
+  53,149 named stops
+Reading routes...
+  2,468 bus routes
+Reading trips...
+  258,274 trips; reading stop_times for 98,243
+Reading stop_times...
+Reading shapes...
+
+routes:     4,503
+operators:  121
+stops:      22,741
+wrote backend/data/raw/real_bus_routes/compiled_bods_south_east.json.gz (2.8 MB gzipped)
+
+--- compile report opened 2026-10-07T15:26:02+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/south_east
+Reading stops...
+  53,149 named stops
+Reading routes...
+  2,468 bus routes
+Reading trips...
+  258,274 trips; reading stop_times for 98,243
+Reading stop_times...
+Reading shapes...
+
+routes:     4,503
+operators:  121
+stops:      22,741
+wrote backend/data/raw/real_bus_routes/compiled_bods_south_east.json.gz (2.8 MB gzipped)
+   compiled: 2.9M
+   elapsed: 4 min, budget left: 56 min
+
+== yorkshire: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 1423k    0 1423k    0     0  1105k      0 --:--:--  0:00:01 --:--:-- 1105k100 46.3M    0 46.3M    0     0  20.2M      0 --:--:--  0:00:02 --:--:-- 20.2M100  103M    0  103M    0     0  31.1M      0 --:--:--  0:00:03 --:--:-- 31.1M100  159M    0  159M    0     0  37.1M      0 --:--:--  0:00:04 --:--:-- 37.1M100  217M    0  217M    0     0  40.9M      0 --:--:--  0:00:05 --:--:-- 43.3M100  231M    0  231M    0     0  41.8M      0 --:--:--  0:00:05 --:--:-- 54.1M
+   242256540 bytes in 5.524829s
+   on disk: 232M
+== yorkshire: unpacking
+   unpacked: 1.6G; files: 9
+== yorkshire: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:27:04+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/yorkshire
+Reading stops...
+  32,303 named stops
+Reading routes...
+  1,219 bus routes
+Reading trips...
+  159,668 trips; reading stop_times for 59,175
+Reading stop_times...
+Reading shapes...
+
+routes:     2,150
+operators:  55
+stops:      18,656
+wrote backend/data/raw/real_bus_routes/compiled_bods_yorkshire.json.gz (1.8 MB gzipped)
+
+--- compile report opened 2026-10-07T15:27:04+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/yorkshire
+Reading stops...
+  32,303 named stops
+Reading routes...
+  1,219 bus routes
+Reading trips...
+  159,668 trips; reading stop_times for 59,175
+Reading stop_times...
+Reading shapes...
+
+routes:     2,150
+operators:  55
+stops:      18,656
+wrote backend/data/raw/real_bus_routes/compiled_bods_yorkshire.json.gz (1.8 MB gzipped)
+   compiled: 1.9M
+   elapsed: 5 min, budget left: 55 min
+
+== east_anglia: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:06 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:07 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:08 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:09 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:10 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:11 --:--:--     0100  4531    0  4531    0     0    377      0 --:--:--  0:00:12 --:--:--   928100 7872k    0 7872k    0     0   608k      0 --:--:--  0:00:12 --:--:-- 1639k100 17.2M    0 17.2M    0     0  1283k      0 --:--:--  0:00:13 --:--:-- 3834k100 26.9M    0 26.9M    0     0  1868k      0 --:--:--  0:00:14 --:--:-- 5986k100 32.0M    0 32.0M    0     0  2088k      0 --:--:--  0:00:15 --:--:-- 7156k100 38.9M    0 38.9M    0     0  2408k      0 --:--:--  0:00:16 --:--:-- 8785k
+   40822856 bytes in 16.555136s
+   on disk: 39M
+== east_anglia: unpacking
+   unpacked: 245M; files: 9
+== east_anglia: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:28:18+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/east_anglia
+Reading stops...
+  13,501 named stops
+Reading routes...
+  647 bus routes
+Reading trips...
+  29,199 trips; reading stop_times for 20,130
+Reading stop_times...
+Reading shapes...
+
+routes:     1,211
+operators:  35
+stops:      5,527
+wrote backend/data/raw/real_bus_routes/compiled_bods_east_anglia.json.gz (0.8 MB gzipped)
+
+--- compile report opened 2026-10-07T15:28:18+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/east_anglia
+Reading stops...
+  13,501 named stops
+Reading routes...
+  647 bus routes
+Reading trips...
+  29,199 trips; reading stop_times for 20,130
+Reading stop_times...
+Reading shapes...
+
+routes:     1,211
+operators:  35
+stops:      5,527
+wrote backend/data/raw/real_bus_routes/compiled_bods_east_anglia.json.gz (0.8 MB gzipped)
+   compiled: 800K
+   elapsed: 6 min, budget left: 54 min
+
+== south_west: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 25.9M    0 25.9M    0     0  20.2M      0 --:--:--  0:00:01 --:--:-- 20.2M100 59.8M    0 59.8M    0     0  26.4M      0 --:--:--  0:00:02 --:--:-- 26.4M100 73.3M    0 73.3M    0     0  22.4M      0 --:--:--  0:00:03 --:--:-- 22.4M100 76.2M    0 76.2M    0     0  17.8M      0 --:--:--  0:00:04 --:--:-- 17.8M100 99.3M    0 99.3M    0     0  18.8M      0 --:--:--  0:00:05 --:--:-- 20.5M100  118M    0  118M    0     0  18.8M      0 --:--:--  0:00:06 --:--:-- 18.5M100  157M    0  157M    0     0  21.6M      0 --:--:--  0:00:07 --:--:-- 19.4M100  214M    0  214M    0     0  25.9M      0 --:--:--  0:00:08 --:--:-- 28.1M100  240M    0  240M    0     0  27.5M      0 --:--:--  0:00:08 --:--:-- 36.7M
+   251724590 bytes in 8.717633s
+   on disk: 241M
+== south_west: unpacking
+   unpacked: 1.6G; files: 9
+== south_west: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:28:43+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/south_west
+Reading stops...
+  42,936 named stops
+Reading routes...
+  1,775 bus routes
+Reading trips...
+  174,268 trips; reading stop_times for 69,252
+Reading stop_times...
+Reading shapes...
+
+routes:     3,218
+operators:  88
+stops:      19,311
+wrote backend/data/raw/real_bus_routes/compiled_bods_south_west.json.gz (3.0 MB gzipped)
+
+--- compile report opened 2026-10-07T15:28:43+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/south_west
+Reading stops...
+  42,936 named stops
+Reading routes...
+  1,775 bus routes
+Reading trips...
+  174,268 trips; reading stop_times for 69,252
+Reading stop_times...
+Reading shapes...
+
+routes:     3,218
+operators:  88
+stops:      19,311
+wrote backend/data/raw/real_bus_routes/compiled_bods_south_west.json.gz (3.0 MB gzipped)
+   compiled: 3.0M
+   elapsed: 7 min, budget left: 53 min
+
+== england: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 43433    0 43433    0     0  61378      0 --:--:-- --:--:-- --:--:-- 61346100 26.3M    0 26.3M    0     0  15.3M      0 --:--:--  0:00:01 --:--:-- 15.3M100 75.3M    0 75.3M    0     0  27.8M      0 --:--:--  0:00:02 --:--:-- 27.8M100  113M    0  113M    0     0  30.7M      0 --:--:--  0:00:03 --:--:-- 30.7M100  155M    0  155M    0     0  33.0M      0 --:--:--  0:00:04 --:--:-- 33.0M100  198M    0  198M    0     0  34.7M      0 --:--:--  0:00:05 --:--:-- 39.6M100  240M    0  240M    0     0  35.8M      0 --:--:--  0:00:06 --:--:-- 42.9M100  282M    0  282M    0     0  36.6M      0 --:--:--  0:00:07 --:--:-- 41.3M100  323M    0  323M    0     0  37.1M      0 --:--:--  0:00:08 --:--:-- 41.9M100  362M    0  362M    0     0  37.3M      0 --:--:--  0:00:09 --:--:-- 41.4M100  399M    0  399M    0     0  37.3M      0 --:--:--  0:00:10 --:--:-- 40.2M100  434M    0  434M    0     0  37.0M      0 --:--:--  0:00:11 --:--:-- 38.7M100  473M    0  473M    0     0  37.2M      0 --:--:--  0:00:12 --:--:-- 38.2M100  515M    0  515M    0     0  37.6M      0 --:--:--  0:00:13 --:--:-- 38.4M100  555M    0  555M    0     0  37.8M      0 --:--:--  0:00:14 --:--:-- 38.6M100  595M    0  595M    0     0  37.8M      0 --:--:--  0:00:15 --:--:-- 39.0M100  619M    0  619M    0     0  37.1M      0 --:--:--  0:00:16 --:--:-- 37.1M100  656M    0  656M    0     0  37.0M      0 --:--:--  0:00:17 --:--:-- 36.5M100  698M    0  698M    0     0  37.3M      0 --:--:--  0:00:18 --:--:-- 36.5M100  743M    0  743M    0     0  37.7M      0 --:--:--  0:00:19 --:--:-- 37.5M100  790M    0  790M    0     0  38.1M      0 --:--:--  0:00:20 --:--:-- 39.0M100  835M    0  835M    0     0  38.5M      0 --:--:--  0:00:21 --:--:-- 43.2M100  881M    0  881M    0     0  38.8M      0 --:--:--  0:00:22 --:--:-- 45.1M100  925M    0  925M    0     0  39.0M      0 --:--:--  0:00:23 --:--:-- 45.4M100  967M    0  967M    0     0  39.1M      0 --:--:--  0:00:24 --:--:-- 44.9M100 1014M    0 1014M    0     0  39.4M      0 --:--:--  0:00:25 --:--:-- 44.7M100 1053M    0 1053M    0     0  39.4M      0 --:--:--  0:00:26 --:--:-- 43.5M100 1099M    0 1099M    0     0  39.7M      0 --:--:--  0:00:27 --:--:-- 43.6M100 1141M    0 1141M    0     0  39.7M      0 --:--:--  0:00:28 --:--:-- 43.2M100 1188M    0 1188M    0     0  40.0M      0 --:--:--  0:00:29 --:--:-- 44.1M100 1231M    0 1231M    0     0  40.1M      0 --:--:--  0:00:30 --:--:-- 43.4M100 1274M    0 1274M    0     0  40.2M      0 --:--:--  0:00:31 --:--:-- 44.2M100 1317M    0 1317M    0     0  40.2M      0 --:--:--  0:00:32 --:--:-- 43.5M100 1363M    0 1363M    0     0  40.4M      0 --:--:--  0:00:33 --:--:-- 44.4M100 1409M    0 1409M    0     0  40.6M      0 --:--:--  0:00:34 --:--:-- 44.1M100 1455M    0 1455M    0     0  40.7M      0 --:--:--  0:00:35 --:--:-- 44.6M100 1480M    0 1480M    0     0  40.8M      0 --:--:--  0:00:36 --:--:-- 45.4M
+   1552012955 bytes in 36.226351s
+   on disk: 1.5G
+== england: unpacking
+   unpacked: 8.8G; files: 10
+== england: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:31:01+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/england
+Reading stops...
+  256,039 named stops
+Reading routes...
+  11,101 bus routes
+Reading trips...
+  1,333,948 trips; reading stop_times for 498,582
+Reading stop_times...
+Reading shapes...
+
+routes:     19,787
+operators:  401
+stops:      101,308
+wrote backend/data/raw/real_bus_routes/compiled_bods_england.json.gz (14.9 MB gzipped)
+
+--- compile report opened 2026-10-07T15:31:01+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/england
+Reading stops...
+  256,039 named stops
+Reading routes...
+  11,101 bus routes
+Reading trips...
+  1,333,948 trips; reading stop_times for 498,582
+Reading stop_times...
+Reading shapes...
+
+routes:     19,787
+operators:  401
+stops:      101,308
+wrote backend/data/raw/real_bus_routes/compiled_bods_england.json.gz (14.9 MB gzipped)
+   compiled: 15M
+   elapsed: 14 min, budget left: 46 min
+
+== scotland: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 36204    0 36204    0     0  41177      0 --:--:-- --:--:-- --:--:-- 41140100 25.1M    0 25.1M    0     0  13.7M      0 --:--:--  0:00:01 --:--:-- 13.6M100 61.9M    0 61.9M    0     0  21.8M      0 --:--:--  0:00:02 --:--:-- 21.8M100  100M    0  100M    0     0  26.2M      0 --:--:--  0:00:03 --:--:-- 26.2M100  136M    0  136M    0     0  28.3M      0 --:--:--  0:00:04 --:--:-- 28.2M100  171M    0  171M    0     0  29.4M      0 --:--:--  0:00:05 --:--:-- 34.6M100  189M    0  189M    0     0  29.9M      0 --:--:--  0:00:06 --:--:-- 36.5M
+   198663067 bytes in 6.328253s
+   on disk: 190M
+== scotland: unpacking
+   unpacked: 1.1G; files: 9
+== scotland: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:36:50+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/scotland
+Reading stops...
+  38,625 named stops
+Reading routes...
+  1,800 bus routes
+Reading trips...
+  183,917 trips; reading stop_times for 81,548
+Reading stop_times...
+Reading shapes...
+
+routes:     3,034
+operators:  109
+stops:      17,700
+wrote backend/data/raw/real_bus_routes/compiled_bods_scotland.json.gz (2.5 MB gzipped)
+
+--- compile report opened 2026-10-07T15:36:50+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/scotland
+Reading stops...
+  38,625 named stops
+Reading routes...
+  1,800 bus routes
+Reading trips...
+  183,917 trips; reading stop_times for 81,548
+Reading stop_times...
+Reading shapes...
+
+routes:     3,034
+operators:  109
+stops:      17,700
+wrote backend/data/raw/real_bus_routes/compiled_bods_scotland.json.gz (2.5 MB gzipped)
+   compiled: 2.6M
+   elapsed: 15 min, budget left: 45 min
+
+== wales: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100 7576k    0 7576k    0     0  7599k      0 --:--:-- --:--:-- --:--:-- 7599k100 49.8M    0 49.8M    0     0  25.6M      0 --:--:--  0:00:01 --:--:-- 25.6M100 63.7M    0 63.7M    0     0  27.9M      0 --:--:--  0:00:02 --:--:-- 27.9M
+   66866143 bytes in 2.285349s
+   on disk: 64M
+== wales: unpacking
+   unpacked: 410M; files: 9
+== wales: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:37:35+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/wales
+Reading stops...
+  22,170 named stops
+Reading routes...
+  828 bus routes
+Reading trips...
+  42,823 trips; reading stop_times for 31,785
+Reading stop_times...
+Reading shapes...
+
+routes:     1,417
+operators:  65
+stops:      11,917
+wrote backend/data/raw/real_bus_routes/compiled_bods_wales.json.gz (1.4 MB gzipped)
+
+--- compile report opened 2026-10-07T15:37:35+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/wales
+Reading stops...
+  22,170 named stops
+Reading routes...
+  828 bus routes
+Reading trips...
+  42,823 trips; reading stop_times for 31,785
+Reading stop_times...
+Reading shapes...
+
+routes:     1,417
+operators:  65
+stops:      11,917
+wrote backend/data/raw/real_bus_routes/compiled_bods_wales.json.gz (1.4 MB gzipped)
+   compiled: 1.4M
+   elapsed: 15 min, budget left: 45 min
+
+== all: downloading
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0100  7341    0  7341    0     0  12553      0 --:--:-- --:--:-- --:--:-- 12548100 6978k    0 6978k    0     0  5225k      0 --:--:--  0:00:01 --:--:-- 5223k100 56.3M    0 56.3M    0     0  24.3M      0 --:--:--  0:00:02 --:--:-- 24.3M100  102M    0  102M    0     0  31.0M      0 --:--:--  0:00:03 --:--:-- 31.0M100  148M    0  148M    0     0  34.4M      0 --:--:--  0:00:04 --:--:-- 34.4M100  188M    0  188M    0     0  35.4M      0 --:--:--  0:00:05 --:--:-- 39.8M100  229M    0  229M    0     0  36.3M      0 --:--:--  0:00:06 --:--:-- 44.6M100  269M    0  269M    0     0  36.9M      0 --:--:--  0:00:07 --:--:-- 42.7M100  309M    0  309M    0     0  37.1M      0 --:--:--  0:00:08 --:--:-- 41.2M100  347M    0  347M    0     0  37.3M      0 --:--:--  0:00:09 --:--:-- 39.8M100  389M    0  389M    0     0  37.7M      0 --:--:--  0:00:10 --:--:-- 40.2M100  424M    0  424M    0     0  37.5M      0 --:--:--  0:00:11 --:--:-- 39.0M100  453M    0  453M    0     0  36.8M      0 --:--:--  0:00:12 --:--:-- 36.6M100  480M    0  480M    0     0  36.1M      0 --:--:--  0:00:13 --:--:-- 34.3M100  508M    0  508M    0     0  35.5M      0 --:--:--  0:00:14 --:--:-- 32.1M100  539M    0  539M    0     0  35.2M      0 --:--:--  0:00:15 --:--:-- 29.9M100  583M    0  583M    0     0  35.7M      0 --:--:--  0:00:16 --:--:-- 31.8M100  623M    0  623M    0     0  36.0M      0 --:--:--  0:00:17 --:--:-- 34.0M100  659M    0  659M    0     0  35.9M      0 --:--:--  0:00:18 --:--:-- 35.6M100  704M    0  704M    0     0  36.4M      0 --:--:--  0:00:19 --:--:-- 39.1M100  748M    0  748M    0     0  36.8M      0 --:--:--  0:00:20 --:--:-- 41.8M100  793M    0  793M    0     0  37.2M      0 --:--:--  0:00:21 --:--:-- 41.8M100  841M    0  841M    0     0  37.7M      0 --:--:--  0:00:22 --:--:-- 43.6M100  889M    0  889M    0     0  38.1M      0 --:--:--  0:00:23 --:--:-- 46.1M100  936M    0  936M    0     0  38.5M      0 --:--:--  0:00:24 --:--:-- 46.3M100  975M    0  975M    0     0  38.5M      0 --:--:--  0:00:25 --:--:-- 45.2M100 1023M    0 1023M    0     0  38.9M      0 --:--:--  0:00:26 --:--:-- 46.0M100 1073M    0 1073M    0     0  39.3M      0 --:--:--  0:00:27 --:--:-- 46.3M100 1121M    0 1121M    0     0  39.6M      0 --:--:--  0:00:28 --:--:-- 46.2M100 1169M    0 1169M    0     0  39.9M      0 --:--:--  0:00:29 --:--:-- 46.7M100 1220M    0 1220M    0     0  40.2M      0 --:--:--  0:00:30 --:--:-- 49.0M100 1270M    0 1270M    0     0  40.5M      0 --:--:--  0:00:31 --:--:-- 49.0M100 1318M    0 1318M    0     0  40.7M      0 --:--:--  0:00:32 --:--:-- 48.9M100 1368M    0 1368M    0     0  41.0M      0 --:--:--  0:00:33 --:--:-- 49.5M100 1416M    0 1416M    0     0  41.2M      0 --:--:--  0:00:34 --:--:-- 49.3M100 1469M    0 1469M    0     0  41.6M      0 --:--:--  0:00:35 --:--:-- 49.8M100 1521M    0 1521M    0     0  41.8M      0 --:--:--  0:00:36 --:--:-- 50.4M100 1572M    0 1572M    0     0  42.1M      0 --:--:--  0:00:37 --:--:-- 50.8M100 1622M    0 1622M    0     0  42.3M      0 --:--:--  0:00:38 --:--:-- 50.7M100 1666M    0 1666M    0     0  42.4M      0 --:--:--  0:00:39 --:--:-- 50.0M100 1713M    0 1713M    0     0  42.5M      0 --:--:--  0:00:40 --:--:-- 48.7M100 1724M    0 1724M    0     0  42.5M      0 --:--:--  0:00:40 --:--:-- 48.2M
+   1807955781 bytes in 40.520060s
+   on disk: 1.7G
+== all: unpacking
+   unpacked: 11G; files: 10
+== all: compiling real routes into MoveIn's schema
+
+--- compile report opened 2026-10-07T15:39:15+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/all
+Reading stops...
+  312,761 named stops
+Reading routes...
+  13,599 bus routes
+Reading trips...
+  1,556,582 trips; reading stop_times for 608,487
+Reading stop_times...
+Reading shapes...
+
+routes:     24,017
+operators:  548
+stops:      124,560
+wrote backend/data/raw/real_bus_routes/compiled_bods_all.json.gz (18.6 MB gzipped)
+
+--- compile report opened 2026-10-07T15:39:15+00:00 ---
+Compiling GTFS from backend/data/raw/bulk_gtfs/all
+Reading stops...
+  312,761 named stops
+Reading routes...
+  13,599 bus routes
+Reading trips...
+  1,556,582 trips; reading stop_times for 608,487
+Reading stop_times...
+Reading shapes...
+
+routes:     24,017
+operators:  548
+stops:      124,560
+wrote backend/data/raw/real_bus_routes/compiled_bods_all.json.gz (18.6 MB gzipped)
+   compiled: 19M
+   elapsed: 27 min, budget left: 33 min
+
+=== 2026-10-07T15:49:14Z result ===
+-rw-r--r-- 1 runner runner 19510574 Oct  7 15:48 backend/data/raw/real_bus_routes/compiled_bods_all.json.gz
+-rw-r--r-- 1 runner runner   818088 Oct  7 15:28 backend/data/raw/real_bus_routes/compiled_bods_east_anglia.json.gz
+-rw-r--r-- 1 runner runner  1759963 Oct  7 15:23 backend/data/raw/real_bus_routes/compiled_bods_east_midlands.json.gz
+-rw-r--r-- 1 runner runner 15609915 Oct  7 15:36 backend/data/raw/real_bus_routes/compiled_bods_england.json.gz
+-rw-r--r-- 1 runner runner  1300103 Oct  7 15:25 backend/data/raw/real_bus_routes/compiled_bods_london.json.gz
+-rw-r--r-- 1 runner runner   933198 Oct  7 15:24 backend/data/raw/real_bus_routes/compiled_bods_north_east.json.gz
+-rw-r--r-- 1 runner runner  2152186 Oct  7 15:24 backend/data/raw/real_bus_routes/compiled_bods_north_west.json.gz
+-rw-r--r-- 1 runner runner  2664861 Oct  7 15:37 backend/data/raw/real_bus_routes/compiled_bods_scotland.json.gz
+-rw-r--r-- 1 runner runner  2977673 Oct  7 15:26 backend/data/raw/real_bus_routes/compiled_bods_south_east.json.gz
+-rw-r--r-- 1 runner runner  3095229 Oct  7 15:29 backend/data/raw/real_bus_routes/compiled_bods_south_west.json.gz
+-rw-r--r-- 1 runner runner  1415609 Oct  7 15:37 backend/data/raw/real_bus_routes/compiled_bods_wales.json.gz
+-rw-r--r-- 1 runner runner  1485463 Oct  7 15:23 backend/data/raw/real_bus_routes/compiled_bods_west_midlands.json.gz
+-rw-r--r-- 1 runner runner  1938848 Oct  7 15:27 backend/data/raw/real_bus_routes/compiled_bods_yorkshire.json.gz
+=== commit 2026-10-07T15:49:14Z ===
+report: -rw-r--r-- 1 runner runner 35119 Oct  7 15:49 ops/last-run.txt
