@@ -10,3 +10,4 @@
 # run 7: only the national file, recompiled --force so it carries the published times
 # run 8: national recompile --force, with stop ids and published times
 # run 9: national recompile at eight samples per direction
+# run 10: national recompile with the streaming compiler, to prove it fits the runner
