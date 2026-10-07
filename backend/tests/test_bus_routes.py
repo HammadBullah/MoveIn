@@ -215,3 +215,18 @@ def test_every_operator_knows_its_own_route_count(client):
     body = client.get("/api/bus/operators").json()
     for entry in body["operators"]:
         assert entry["routes"] >= entry["services"] >= 1
+
+
+def test_the_city_answer_is_measured_from_the_routes(client):
+    """The per-city answer comes from the routes, and says how it was counted."""
+    body = client.get("/api/bus/cities").json()
+    cities = {city["name"]: city for city in body["cities"]}
+    assert {"London", "Nottingham", "Cardiff", "Nuneaton"} <= set(cities)
+    assert body["internal_km"] == 8
+    assert "city-internal" in body["note"]
+    for city in cities.values():
+        # A city cannot have more routes staying in it than calling at it.
+        assert 0 <= city["city_internal"] <= city["published"]
+        if city["published"]:
+            assert city["top_operator"], f"{city['name']} has routes but no operator"
+    assert max(city["city_internal"] for city in cities.values()) >= 20

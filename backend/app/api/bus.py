@@ -104,6 +104,64 @@ def bus_coverage() -> dict:
     }
 
 
+#: The cities the product names, so the per-city answer is the same each time.
+CITIES: list[tuple[str, float, float]] = [
+    ("London", 51.5074, -0.1278),
+    ("Birmingham", 52.4862, -1.8904),
+    ("Manchester", 53.4808, -2.2426),
+    ("Leeds", 53.8008, -1.5491),
+    ("Glasgow", 55.8642, -4.2518),
+    ("Liverpool", 53.4084, -2.9916),
+    ("Newcastle", 54.9783, -1.6178),
+    ("Sheffield", 53.3811, -1.4701),
+    ("Bristol", 51.4545, -2.5879),
+    ("Edinburgh", 55.9533, -3.1883),
+    ("Cardiff", 51.4816, -3.1791),
+    ("Nottingham", 52.9536, -1.1505),
+    ("Leicester", 52.6369, -1.1398),
+    ("Coventry", 52.4068, -1.5197),
+    ("Belfast", 54.5973, -5.9301),
+    ("Brighton", 50.8225, -0.1372),
+    ("Southampton", 50.9097, -1.4044),
+    ("Norwich", 52.6309, 1.2974),
+    ("Oxford", 51.7520, -1.2577),
+    ("Cambridge", 52.2053, 0.1218),
+    ("Reading", 51.4543, -0.9781),
+    ("Milton Keynes", 52.0406, -0.7594),
+    ("Derby", 52.9225, -1.4746),
+    ("Stoke-on-Trent", 53.0027, -2.1794),
+    ("Plymouth", 50.3755, -4.1427),
+    ("Hull", 53.7676, -0.3274),
+    ("York", 53.9600, -1.0873),
+    ("Nuneaton", 52.5221, -1.4675),
+    ("Rugby", 52.3705, -1.2625),
+    ("Banbury", 52.0621, -1.3397),
+]
+
+
+@bus.get("/cities", summary="Published buses, city by city")
+def bus_cities() -> dict:
+    """How much published bus service each city has, counted from the routes.
+
+    Two numbers per city, and both matter: how many published routes call within
+    6 km of the centre, and how many of those keep both ends within 8 km, which
+    is what makes a route a city bus rather than an inter-city one.
+    """
+    net = network_or_404()
+    return {
+        "cities": net.city_report(CITIES),
+        "radius_m": 6000,
+        "internal_km": 8,
+        "note": (
+            "Counted from the published routes in this layer, not from any "
+            "register of who is allowed to run what: a route is city-internal "
+            "when both ends of the line fall within 8 km of the city centre. "
+            "It counts line directions, so a route out and back counts twice."
+        ),
+        "attribution": net.attribution,
+    }
+
+
 @bus.get("/operators", summary="Operators in the real bus network")
 def bus_operators() -> dict:
     net = network_or_404()

@@ -8,6 +8,7 @@ import type {
   Place,
   Preference,
   RealBusBetween,
+  RealBusCitiesResponse,
   RealBusCoverage,
   RealBusMapResponse,
   RealBusOperator,
@@ -160,6 +161,8 @@ export const api = {
   },
 
   realBusRoute: (id: string) => request<RealBusRouteDetail>(`/bus/routes/${encodeURIComponent(id)}`),
+
+  realBusCities: () => request<RealBusCitiesResponse>('/bus/cities'),
 
   realBusMap: (
     params: {

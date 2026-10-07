@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { Button, Section } from '../components/Controls'
 import { Icon } from '../components/Icons'
 import { api } from '../lib/api'
-import type { CoverageResponse, DataSourcesResponse, NetworkSummary, RealBusCoverage } from '../lib/types'
+import type {
+  CoverageResponse,
+  DataSourcesResponse,
+  NetworkSummary,
+  RealBusCitiesResponse,
+  RealBusCoverage,
+} from '../lib/types'
 
 /**
  * Where the numbers come from.
@@ -16,6 +22,7 @@ export function DataScreen({ onBack, onOpenBus }: { onBack: () => void; onOpenBu
   const [network, setNetwork] = useState<NetworkSummary | null>(null)
   const [coverage, setCoverage] = useState<CoverageResponse | null>(null)
   const [realBus, setRealBus] = useState<RealBusCoverage | null>(null)
+  const [busCities, setBusCities] = useState<RealBusCitiesResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -24,12 +31,14 @@ export function DataScreen({ onBack, onOpenBus }: { onBack: () => void; onOpenBu
       api.networkSummary(),
       api.networkCoverage(),
       api.realBusCoverage().catch(() => null),
+      api.realBusCities().catch(() => null),
     ])
-      .then(([data, summary, cover, bus]) => {
+      .then(([data, summary, cover, bus, cities]) => {
         setSources(data)
         setNetwork(summary)
         setCoverage(cover)
         setRealBus(bus)
+        setBusCities(cities)
       })
       .catch(() => setError('The API is not reachable, so the provenance cannot be shown.'))
   }, [])
@@ -73,6 +82,23 @@ export function DataScreen({ onBack, onOpenBus }: { onBack: () => void; onOpenBu
               </span>
             </div>
             <p className="small">{realBus.note}</p>
+            {busCities && (
+              <>
+                <h3 className="data__subhead">Buses in the city, city by city</h3>
+                <ul className="data__cities">
+                  {busCities.cities.slice(0, 12).map((city) => (
+                    <li key={city.name} className="data__city">
+                      <strong>{city.name}</strong>
+                      <em>
+                        {city.city_internal} in the city · {city.published} published nearby
+                      </em>
+                      <span className="muted tiny">{city.top_operator}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="muted tiny">{busCities.note}</p>
+              </>
+            )}
             <p className="muted tiny">{realBus.coverage_note}</p>
             <p className="muted tiny">{realBus.attribution}</p>
             {onOpenBus && <Button onClick={onOpenBus}>Browse the bus routes</Button>}

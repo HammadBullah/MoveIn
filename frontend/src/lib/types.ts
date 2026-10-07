@@ -380,6 +380,26 @@ export interface RealBusStop {
   time?: string
 }
 
+export interface RealBusCity {
+  name: string
+  lat: number
+  lon: number
+  /** Published route-directions calling within 6 km of the centre. */
+  published: number
+  /** Those whose first and last stops are both within 8 km: city buses. */
+  city_internal: number
+  operators: number
+  top_operator: string
+}
+
+export interface RealBusCitiesResponse {
+  cities: RealBusCity[]
+  radius_m: number
+  internal_km: number
+  note: string
+  attribution: string
+}
+
 export interface RealBusRouteSummary {
   id: string
   service: string

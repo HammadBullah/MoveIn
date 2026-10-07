@@ -224,6 +224,7 @@ class RealBusNetwork:
             )
             self.routes[route.id] = route
         self._stats: dict | None = None
+        self._cities: list[dict] | None = None
         self._by_operator: dict[str, list[str]] = {}
         self._by_stop: dict[str, list[str]] = {}
         for route in self.routes.values():
@@ -422,6 +423,53 @@ class RealBusNetwork:
         ]
 
     # -- honesty ----------------------------------------------------------
+
+    def city_report(
+        self,
+        cities: list[tuple[str, float, float]],
+        *,
+        radius_m: float = 6000.0,
+        internal_km: float = 8.0,
+    ) -> list[dict]:
+        """For each city: how many published routes serve it, and how many stay in it.
+
+        "City-internal" means both ends of the line are within `internal_km` of
+        the city centre -- that is the difference between a city bus and an
+        inter-city one, measured from the published routes rather than guessed.
+        Computed once and kept: it walks the whole network per city.
+        """
+        if self._cities is not None:
+            return self._cities
+        rows: list[dict] = []
+        for name, lat, lon in cities:
+            nearby = self.routes_near(lat, lon, radius_m)
+            internal = 0
+            operators: dict[str, int] = {}
+            for route in nearby:
+                operators[route.operator] = operators.get(route.operator, 0) + 1
+                if len(route.stops) < 2:
+                    continue
+                first, last = route.stops[0], route.stops[-1]
+                if (
+                    haversine_m(lat, lon, first.lat, first.lon) <= internal_km * 1000
+                    and haversine_m(lat, lon, last.lat, last.lon) <= internal_km * 1000
+                ):
+                    internal += 1
+            top = max(operators.items(), key=lambda item: item[1])[0] if operators else ""
+            rows.append(
+                {
+                    "name": name,
+                    "lat": round(lat, 5),
+                    "lon": round(lon, 5),
+                    "published": len(nearby),
+                    "city_internal": internal,
+                    "operators": len(operators),
+                    "top_operator": top,
+                }
+            )
+        rows.sort(key=lambda row: (-row["city_internal"], row["name"]))
+        self._cities = rows
+        return rows
 
     def stats(self) -> dict:
         """The counts the product quotes, computed from the data, never guessed.
