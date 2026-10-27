@@ -1,0 +1,30 @@
+name: home_ledger
+description: >-
+  HomeLedger - a UK-first household bill tracker. Enter an address once,
+  discover which household services apply, confirm the details the resident
+  actually knows, and track only confirmed bills and dates.
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Local persistence. Replace with the Flask API client once the backend
+  # is deployed (see server/README.md).
+  shared_preferences: ^2.2.3
+
+  # Used only to open official provider-lookup pages in the browser.
+  url_launcher: ^6.2.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
