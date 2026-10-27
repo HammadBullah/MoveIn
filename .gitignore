@@ -1,0 +1,28 @@
+# Flutter / Dart
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/.pub-cache/
+app/.pub/
+app/ios/Pods/
+app/android/.gradle/
+app/android/local.properties
+*.iml
+
+# Python / Flask
+server/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+server/instance/
+*.db
+*.sqlite3
+.env
+
+# Docs / editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.log
