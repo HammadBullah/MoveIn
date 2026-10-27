@@ -2,10 +2,6 @@ import '../core/json.dart';
 import 'enums.dart';
 import 'field.dart';
 
-/// Everything the app knows about one household service slot at a property.
-///
-/// Each attribute is a [Field], so the app can always answer "how do you know
-/// that?" for every single value it displays.
 class HouseholdService {
   HouseholdService({
     required this.id,

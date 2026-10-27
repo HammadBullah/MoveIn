@@ -175,6 +175,21 @@ extension DocumentKindInfo on DocumentKind {
         DocumentKind.other => 'Document',
       };
 }
+extension ServiceKindOnboardingInfo on ServiceKind {
+  String get onboardingDiscoveryHint => switch (this) {
+        ServiceKind.electricity =>
+          'We can suggest likely suppliers later, but you confirm who bills you.',
+        ServiceKind.gas =>
+          'Gas may be with a different supplier than electricity.',
+        ServiceKind.water =>
+          'Water is usually regional, but your exact retailer still needs confirmation.',
+        ServiceKind.councilTax =>
+          'Council tax band and discounts are checked with your council records.',
+        ServiceKind.broadband =>
+          'Broadband provider and package must be confirmed from your contract or bill.',
+        _ => 'Provider details are confirmed by you from a bill or statement.',
+      };
+}
 
 /// Whether a bill has been paid, and whether we actually know that.
 enum PaymentStatus {

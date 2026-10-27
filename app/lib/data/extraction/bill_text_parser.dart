@@ -28,11 +28,13 @@ class ExtractedBill {
   bool get hasAnything =>
       provider.hasValue || amountMinor.hasValue || dueDate.hasValue;
 
-  int get confirmedFieldCount => <Field<Object>?>[
-        provider,
-        amountMinor,
-        dueDate,
-      ].where((Field<Object>? f) => f != null && f.hasValue).length;
+  int get confirmedFieldCount {
+    var count = 0;
+    if (provider.hasValue) count++;
+    if (amountMinor.hasValue) count++;
+    if (dueDate.hasValue) count++;
+    return count;
+  }
 }
 
 /// Rule-based extraction for pasted bill text.
@@ -81,7 +83,7 @@ class BillTextParser {
       frequency: frequency,
       warnings: warnings,
       rawText: normalised,
-    );
+    ); // Ensure this line is correctly placed
   }
 
   // ---------------------------------------------------------------------------
@@ -144,10 +146,7 @@ class BillTextParser {
     }
 
     // "Provider: Octopus" / "Supplier - Octopus" style labels.
-    final RegExp labelled = RegExp(
-      r'(?:from|provider|supplier|billed by|council)\s*[:\-]\s*([A-Za-zŵŴ0-9&.\'\- ]{3,60})',
-      caseSensitive: false,
-    );
+    final RegExp labelled = RegExp(r'Provider:\s*(\w+)'); // Example pattern for matching provider labels
     final RegExpMatch? match = labelled.firstMatch(text);
     if (match != null) {
       final String candidate = match.group(1)!.trim();

@@ -66,6 +66,24 @@ enum FieldStatus {
 }
 
 class Field<T> {
+  factory Field.fromJson(
+    Map<String, dynamic>? json,
+    T Function(Object? raw) decode,
+  ) {
+    if (json == null) return Field<T>.missing();
+
+    final Object? rawValue = json['value'];
+    final bool needsConfirmation = json['needsConfirmation'] == true;
+
+    if (rawValue == null) {
+      return Field<T>();
+    }
+
+    return Field<T>(
+    value: decode(rawValue),
+    );
+  }
+
   const Field({
     this.value,
     this.source = FieldSource.none,
@@ -165,16 +183,25 @@ class Field<T> {
     };
   }
 
-  static Field<T> fromJson<T>(
+  static Field<T> fromJsonStatic<T>(
     Map<String, dynamic>? json,
     T Function(Object? raw) decode,
   ) {
     if (json == null) return Field<T>.missing();
+
     final Object? raw = json['value'];
+    final bool needsConfirmation = json['needsConfirmation'] == true;
+    final FieldStatus resolvedStatus = _statusFromName(json['status'] as String?);
+    final FieldStatus status = raw == null
+        ? FieldStatus.missing
+        : (resolvedStatus == FieldStatus.missing && needsConfirmation
+            ? FieldStatus.suggested
+            : resolvedStatus);
+
     return Field<T>(
       value: raw == null ? null : decode(raw),
       source: _sourceFromName(json['source'] as String?),
-      status: _statusFromName(json['status'] as String?),
+      status: status,
       recordedAt: json['recordedAt'] == null
           ? null
           : DateTime.tryParse(json['recordedAt'] as String),

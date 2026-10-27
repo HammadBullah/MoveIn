@@ -25,6 +25,13 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int _step = 0;
+static const List<ServiceKind> _onboardingDefaults = <ServiceKind>[
+    ServiceKind.electricity,
+    ServiceKind.gas,
+    ServiceKind.water,
+    ServiceKind.councilTax,
+    ServiceKind.broadband,
+  ];
 
   final TextEditingController _postcode = TextEditingController();
   final TextEditingController _name = TextEditingController();
@@ -35,7 +42,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   AddressCandidate? _selected;
 
   Tenure _tenure = Tenure.renting;
-  final Set<ServiceKind> _services = ServiceKind.onboardingDefaults.toSet();
+  final Set<ServiceKind> kinds = ServiceKind.values.toSet();
+  final Set<ServiceKind> _services = <ServiceKind>{};
 
   bool _saving = false;
 
@@ -105,17 +113,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final AddressCandidate? address = _selected;
     if (address == null || _services.isEmpty) return;
 
+    const Map<ServiceKind, int> serviceOrder = <ServiceKind, int>{
+      ServiceKind.electricity: 0,
+      ServiceKind.gas: 1,
+      ServiceKind.water: 2,
+      ServiceKind.councilTax: 3,
+      ServiceKind.broadband: 4,
+    };
+
     setState(() => _saving = true);
     await MoveInScope.read(context).createHousehold(
       address: address,
       tenure: _tenure,
       services: _services.toList()
-        ..sort((ServiceKind a, ServiceKind b) => a.index.compareTo(b.index)),
+        ..sort((ServiceKind a, ServiceKind b) {
+          final int aOrder = serviceOrder[a] ?? serviceOrder.length;
+          final int bOrder = serviceOrder[b] ?? serviceOrder.length;
+          return aOrder.compareTo(bOrder);
+        }),
       residentName: _name.text,
     );
     // RootGate swaps to the confirmation screen once the property exists.
     if (mounted) setState(() => _saving = false);
   }
+
 
   bool get _canContinue {
     if (_step == 0) return _selected != null;
@@ -320,10 +341,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             for (final Tenure tenure in Tenure.values) ...<Widget>[
               ListTile(
                 leading: Icon(switch (tenure) {
-                  Tenure.renting => Icons.key_outlined,
-                  Tenure.owning => Icons.house_outlined,
-                  Tenure.other => Icons.help_outline,
-                }),
+  Tenure.renting => Icons.key_outlined,
+  Tenure.owning => Icons.house_outlined,
+  Tenure.other => Icons.help_outline,
+}),
                 title: Text(tenure.label),
                 trailing: _tenure == tenure
                     ? Icon(Icons.check_circle, color: theme.colorScheme.primary)
@@ -364,7 +385,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       AppCard(
         child: Column(
           children: <Widget>[
-            for (final ServiceKind kind in ServiceKind.onboardingDefaults) ...<Widget>[
+            for (final ServiceKind kind in _onboardingDefaults) ...<Widget>[
               CheckboxListTile(
                 value: _services.contains(kind),
                 onChanged: (bool? value) {
@@ -378,14 +399,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
                 title: Text(kind.label),
                 subtitle: Text(
-                  kind.discoveryHint,
+                  kind.onboardingDiscoveryHint,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 controlAffinity: ListTileControlAffinity.leading,
               ),
-              if (kind != ServiceKind.onboardingDefaults.last) const Divider(height: 1),
+              if (kind != _onboardingDefaults.last) const Divider(height: 1),
             ],
           ],
         ),
@@ -400,6 +421,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ];
   }
 }
+
+
 
 class _ManualAddressDialog extends StatefulWidget {
   const _ManualAddressDialog({required this.postcode});
